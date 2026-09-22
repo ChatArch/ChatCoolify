@@ -1,0 +1,86 @@
+site_name: ChatCoolify 文档
+site_url: https://arch.gh.wzhecnu.cn/ChatCoolify/
+repo_url: https://github.com/ChatArch/ChatCoolify
+repo_name: ChatArch/ChatCoolify
+edit_uri: edit/main/docs/
+docs_dir: docs/
+
+theme:
+  name: material
+  language: zh
+  palette:
+    primary: teal
+    accent: orange
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - search.highlight
+    - content.code.copy
+
+plugins:
+  - search:
+      lang: zh
+  - i18n:
+      docs_structure: suffix
+      fallback_to_default: true
+      reconfigure_material: true
+      reconfigure_search: true
+      languages:
+        - locale: zh
+          default: true
+          name: 中文
+          build: true
+          site_name: ChatCoolify 文档
+        - locale: en
+          name: English
+          build: true
+          site_name: ChatCoolify Documentation
+          nav_translations:
+            主页: Home
+            快速开始: Quick Start
+            AI 接入: AI Integration
+            接口地图: Interface Map
+            使用示例: Examples
+            运维与安全: Operations and Safety
+  - minify:
+      minify_html: true
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.details
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.magiclink
+  - pymdownx.superfences
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+
+extra:
+  alternate:
+    - name: 中文
+      link: /ChatCoolify/
+      lang: zh
+    - name: English
+      link: /ChatCoolify/en/
+      lang: en
+
+nav:
+  - 主页: index.md
+  - 快速开始:
+      - 注册与邀请: registration.md
+      - Python 客户端: python-client.md
+  - AI 接入: ai-integration.md
+  - 接口地图:
+      - CLI 树: cli-tree.md
+      - 能力地图: capability-map.md
+  - 使用示例:
+      - 托管简单网站: simple-website.md
+      - 前后端与数据库: full-stack.md
+  - 运维与安全: operations.md

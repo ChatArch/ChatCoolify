@@ -1,0 +1,63 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ChatCoolify"
+version = "0.1.0"
+description = "AI-safe Python client and CLI for the official Coolify API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{name = "ChatArch", email = "1073853456@qq.com"}]
+keywords = ["ai", "chatarch", "coolify", "deployment", "mcp", "paas"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+dependencies = [
+    "chatenv>=0.2.9,<0.3.0",
+    "click>=8.1,<9.0",
+]
+
+[project.urls]
+Homepage = "https://arch.gh.wzhecnu.cn/ChatCoolify/"
+Documentation = "https://arch.gh.wzhecnu.cn/ChatCoolify/"
+Repository = "https://github.com/ChatArch/ChatCoolify"
+Issues = "https://github.com/ChatArch/ChatCoolify/issues"
+
+[project.scripts]
+chatcoolify = "chatcoolify.cli:main"
+
+[project.entry-points."chatenv.configs"]
+chatcoolify = "chatcoolify.config"
+
+[project.optional-dependencies]
+dev = [
+    "build>=1.2,<2.0",
+    "pytest>=8.0,<10.0",
+    "twine>=5.0,<7.0",
+]
+docs = [
+    "mkdocs>=1.6,<2.0",
+    "mkdocs-material>=9.5,<10.0",
+    "mkdocs-static-i18n>=1.2,<2.0",
+    "mkdocs-minify-plugin>=0.8,<1.0",
+    "mike>=2.0,<3.0",
+]
+
+[tool.setuptools]
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+addopts = "-q"
