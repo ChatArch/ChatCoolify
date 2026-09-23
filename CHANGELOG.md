@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.1.1 - 2026-09-23
+
+### Added
+
+- Explicit automatic wildcard-domain contract for public Git applications when no custom `--domain` is supplied.
+- Project and application detail retrieval, including project environments plus the allocated application domain and status.
+- Optional `--health-check-path` support that enables Coolify health checks at application creation.
+- A real source-to-public-HTTPS deployment case with public screenshots and verification guidance.
+
+### Fixed
+
+- Deployment history now accepts the official `{\"count\": ..., \"deployments\": [...]}` response envelope.
+- API failures redact the configured token, discard raw HTTP exception chains, and reject credential-bearing base URLs.
+
 ## 0.1.0 - 2026-09-22
 
 ### Added

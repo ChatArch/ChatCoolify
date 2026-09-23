@@ -10,11 +10,13 @@ chatcoolify
 |- --tree-brief
 |- --base-url
 |- --allow-write
+|- application  # Show one application, including its allocated domain and status.
 |- applications  # List applications visible to the configured API token.
 |- deploy  # Trigger a deployment. Requires the global --allow-write flag.
 |- deployments  # List deployment history for one application.
 |- health  # Call the public health endpoint; no API token is needed.
 |- overview  # Show a compact read-only inventory for the configured team.
+|- project  # Show one project and its environments by UUID.
 |- project-create  # Create a project. Requires the global --allow-write flag.
 |- projects  # List projects visible to the configured API token.
 |- servers  # List servers visible to the configured API token.
@@ -28,7 +30,7 @@ chatcoolify
 | 命令 | 远端副作用 | 需要 Token |
 | --- | --- | --- |
 | `health` | 无 | 否 |
-| `team`、`projects`、`applications`、`servers`、`deployments`、`overview` | 无 | `read` |
+| `team`、`projects`、`project`、`application`、`applications`、`servers`、`deployments`、`overview` | 无 | `read` |
 | `website-plan` | 无 | 否 |
 | `project-create`、`website-create` | 创建资源 | `write` + `--allow-write` |
 | `deploy` | 触发部署 | `deploy` + `--allow-write` |

@@ -23,7 +23,9 @@ chatcoolify --base-url https://<coolify-url> health
 chatcoolify team
 chatcoolify overview
 chatcoolify projects
+chatcoolify project PROJECT_UUID
 chatcoolify applications
+chatcoolify application APPLICATION_UUID
 chatcoolify servers
 ```
 
@@ -36,6 +38,8 @@ client = CoolifyClient.from_env()
 print(client.health())
 print(client.current_team())
 print(client.list_projects())
+print(client.get_project("PROJECT_UUID"))
+print(client.get_application("APPLICATION_UUID"))
 ```
 
 ## 写操作的双门
@@ -63,6 +67,7 @@ chatcoolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
-  --repository-url https://github.com/example/site \
-  --domain https://site.example.com
+  --repository-url https://github.com/example/site
 ```
+
+省略 `--domain` 时，payload 会显式包含 `autogenerate_domain: true`；Coolify 将从平台配置的泛域名池分配唯一地址。

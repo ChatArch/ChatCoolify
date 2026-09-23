@@ -5,7 +5,7 @@
 | Coolify health check | Implemented | Token-free read |
 | Team, project, application, server, and deployment reads | Implemented | Team-scoped `read` token |
 | Project creation | Implemented | `write` token plus explicit local gate |
-| Public Git website creation | Implemented | Wraps official API payload only |
+| Public Git website creation | Implemented | Omitting a domain requests automatic allocation from the Coolify wildcard pool |
 | Deployment trigger | Implemented | `deploy` token plus explicit local gate |
 | Official MCP integration | Provided by Coolify | ChatCoolify does not reimplement an MCP server |
 | Token creation, revocation, and permission management | Out of scope | Use the Coolify Web UI |

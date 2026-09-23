@@ -49,9 +49,10 @@ chatcoolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
-  --repository-url https://github.com/example/simple-site \
-  --domain https://site.example.com
+  --repository-url https://github.com/example/simple-site
 ```
+
+When `--domain` is omitted, the plan asks Coolify to allocate a unique tenant URL from the configured wildcard pool. Pass `--domain` only for a custom domain. See the full [verified Git-to-HTTPS demo](https://arch.gh.wzhecnu.cn/ChatCoolify/en/self-service-demo/).
 
 The command only renders an official API payload. Creating a resource requires both a `write` token and an explicit local gate:
 

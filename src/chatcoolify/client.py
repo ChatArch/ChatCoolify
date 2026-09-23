@@ -5,12 +5,31 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 import os
+import re
 from typing import Any, Mapping, Sequence
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlencode, urljoin, urlparse
 from urllib.request import Request, urlopen
 
 DEFAULT_BASE_URL = "https://coolify.example.com"
+
+_PROJECT_FIELDS = ("uuid", "name", "created_at", "updated_at")
+_ENVIRONMENT_FIELDS = ("uuid", "name", "description")
+_APPLICATION_FIELDS = (
+    "uuid",
+    "name",
+    "fqdn",
+    "status",
+    "git_repository",
+    "git_branch",
+    "build_pack",
+    "ports_exposes",
+    "health_check_enabled",
+    "health_check_path",
+    "health_check_scheme",
+    "created_at",
+    "updated_at",
+)
 
 
 class CoolifyError(RuntimeError):
@@ -47,6 +66,7 @@ class PublicApplicationSpec:
     build_pack: str = "static"
     name: str | None = None
     domains: str | None = None
+    autogenerate_domain: bool = True
     publish_directory: str | None = None
     is_static: bool = True
     is_spa: bool = True
@@ -63,7 +83,10 @@ class PublicApplicationSpec:
         _require_repository(self.git_repository)
         _require_text("git_branch", self.git_branch)
         _require_text("build_pack", self.build_pack)
+        if not isinstance(self.autogenerate_domain, bool):
+            raise CoolifyConfigurationError("autogenerate_domain must be a boolean")
 
+        selected_domain = self.domains.strip() if self.domains and self.domains.strip() else None
         payload: dict[str, Any] = {
             "project_uuid": self.project_uuid,
             "server_uuid": self.server_uuid,
@@ -74,6 +97,7 @@ class PublicApplicationSpec:
             "build_pack": self.build_pack,
             "is_static": self.is_static,
             "is_spa": self.is_spa,
+            "autogenerate_domain": self.autogenerate_domain and selected_domain is None,
             "instant_deploy": instant_deploy,
         }
         optional_text = {
@@ -85,6 +109,8 @@ class PublicApplicationSpec:
         for key, value in optional_text.items():
             if value is not None and value.strip():
                 payload[key] = value.strip()
+        if self.health_check_path is not None and self.health_check_path.strip():
+            payload["health_check_enabled"] = True
         if self.port is not None:
             if not 1 <= self.port <= 65535:
                 raise CoolifyConfigurationError("port must be between 1 and 65535")
@@ -142,8 +168,22 @@ class CoolifyClient:
     def list_projects(self) -> Sequence[Mapping[str, Any]]:
         return _as_sequence(self._request("GET", "/api/v1/projects"), "projects")
 
+    def get_project(self, project_uuid: str) -> Mapping[str, Any]:
+        """Get one project, including its environments, by public UUID."""
+
+        _require_text("project_uuid", project_uuid)
+        path = f"/api/v1/projects/{quote(project_uuid, safe='')}"
+        return _project_summary(self._request("GET", path))
+
     def list_applications(self) -> Sequence[Mapping[str, Any]]:
         return _as_sequence(self._request("GET", "/api/v1/applications"), "applications")
+
+    def get_application(self, application_uuid: str) -> Mapping[str, Any]:
+        """Get one application, including its allocated domain and status."""
+
+        _require_text("application_uuid", application_uuid)
+        path = f"/api/v1/applications/{quote(application_uuid, safe='')}"
+        return _application_summary(self._request("GET", path))
 
     def list_servers(self) -> Sequence[Mapping[str, Any]]:
         return _as_sequence(self._request("GET", "/api/v1/servers"), "servers")
@@ -154,7 +194,10 @@ class CoolifyClient:
             raise CoolifyConfigurationError("skip must be >= 0 and take must be >= 1")
         query = urlencode({"skip": skip, "take": take})
         path = f"/api/v1/deployments/applications/{quote(application_uuid, safe='')}?{query}"
-        return _as_sequence(self._request("GET", path), "deployments")
+        result = self._request("GET", path)
+        if isinstance(result, Mapping):
+            result = result.get("deployments")
+        return _as_sequence(result, "deployments")
 
     def create_project(self, name: str, *, description: str | None = None) -> Mapping[str, Any]:
         """Create a project only after the caller explicitly enabled writes."""
@@ -216,7 +259,7 @@ class CoolifyClient:
             )
 
         url = urljoin(f"{self.base_url}/", path.lstrip("/"))
-        headers = {"Accept": "application/json", "User-Agent": "ChatCoolify/0.1.0"}
+        headers = {"Accept": "application/json", "User-Agent": "ChatCoolify"}
         data = None
         if auth:
             headers["Authorization"] = f"Bearer {self.token}"
@@ -225,6 +268,7 @@ class CoolifyClient:
             data = json.dumps(payload).encode("utf-8")
 
         request = Request(url, data=data, headers=headers, method=method.upper())
+        pending_error: CoolifyError | None = None
         try:
             with urlopen(request, timeout=self.timeout) as response:  # nosec B310 - URL is user-configured API origin
                 content_type = response.headers.get_content_type()
@@ -235,10 +279,13 @@ class CoolifyClient:
                     return json.loads(raw)
                 return raw
         except HTTPError as error:
-            message = _error_message(error)
-            raise CoolifyAPIError(error.code, message) from error
+            pending_error = CoolifyAPIError(error.code, _error_message(error, self.token))
         except URLError as error:
-            raise CoolifyError(f"Coolify API is unreachable: {error.reason}") from error
+            reason = _redact_sensitive_text(str(error.reason), self.token)
+            pending_error = CoolifyError(f"Coolify API is unreachable: {reason}")
+        if pending_error is not None:
+            raise pending_error
+        raise CoolifyError("Coolify API request ended without a response")
 
 
 def _load_chatenv_values() -> Mapping[str, str]:
@@ -259,6 +306,8 @@ def _normalise_base_url(value: str) -> str:
     parsed = urlparse(candidate)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc:
         raise CoolifyConfigurationError("COOLIFY_BASE_URL must be an absolute http(s) URL")
+    if parsed.username is not None or parsed.password is not None:
+        raise CoolifyConfigurationError("COOLIFY_BASE_URL must not include credentials")
     return candidate
 
 
@@ -286,17 +335,46 @@ def _as_sequence(value: Any, label: str) -> Sequence[Mapping[str, Any]]:
     return value
 
 
-def _error_message(error: HTTPError) -> str:
-    """Extract only a short server message; never include request headers or token data."""
+def _select_fields(value: Mapping[str, Any], fields: Sequence[str]) -> dict[str, Any]:
+    return {field: value[field] for field in fields if field in value}
+
+
+def _project_summary(value: Any) -> Mapping[str, Any]:
+    project = _as_mapping(value, "project")
+    environments = project.get("environments")
+    if not isinstance(environments, list) or not all(isinstance(item, Mapping) for item in environments):
+        raise CoolifyError("Coolify returned an unexpected project environments response")
+    summary = _select_fields(project, _PROJECT_FIELDS)
+    summary["environments"] = [_select_fields(environment, _ENVIRONMENT_FIELDS) for environment in environments]
+    return summary
+
+
+def _application_summary(value: Any) -> Mapping[str, Any]:
+    application = _as_mapping(value, "application")
+    return _select_fields(application, _APPLICATION_FIELDS)
+
+
+def _redact_sensitive_text(value: str, token: str | None) -> str:
+    """Redact only the resolved token and URL userinfo from untrusted error text."""
+
+    redacted = value
+    if token:
+        redacted = redacted.replace(token, "[REDACTED]")
+    redacted = re.sub(r"(?i)(bearer\s+)[^\s,;]+", r"\1[REDACTED]", redacted)
+    return re.sub(r"(?i)(https?://)[^/\s@]+@", r"\1[REDACTED]@", redacted)
+
+
+def _error_message(error: HTTPError, token: str | None) -> str:
+    """Extract a short, redacted server message without retaining request state."""
 
     try:
         raw = error.read().decode("utf-8", errors="replace")
         parsed = json.loads(raw)
         if isinstance(parsed, Mapping) and isinstance(parsed.get("message"), str):
-            return parsed["message"][:500]
+            return _redact_sensitive_text(parsed["message"], token)[:500]
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         pass
-    return error.reason or "request failed"
+    return _redact_sensitive_text(str(error.reason or "request failed"), token)
 
 
 __all__ = [
