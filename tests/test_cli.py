@@ -26,10 +26,13 @@ def test_version_and_registered_tree_are_available() -> None:
     runner = CliRunner()
     version = runner.invoke(main, ["--version"])
     assert version.exit_code == 0, version.output
-    assert "0.1.1" in version.output
+    assert "0.2.0" in version.output
     tree = runner.invoke(main, ["--tree"])
     assert tree.exit_code == 0, tree.output
-    assert tree.output.splitlines()[0] == "chatcoolify"
+    assert tree.output.splitlines()[0] == "coolify"
+    help_result = runner.invoke(main, ["--help"])
+    assert help_result.exit_code == 0, help_result.output
+    assert "Usage: coolify" in help_result.output
     assert "website-plan" in tree.output
     assert "project" in tree.output
     assert "application" in tree.output

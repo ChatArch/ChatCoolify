@@ -32,7 +32,7 @@
 
 | 现象 | 先做什么 |
 | --- | --- |
-| 控制面不可达 | 调用 `chatcoolify health` |
+| 控制面不可达 | 调用 `coolify health` |
 | 401 | 检查 Token 完整性、过期和撤销状态 |
 | 403 | 检查 Team、权限、API Access 与 IP Allowlist |
 | 422 | 修正请求字段，不重复提交写操作 |

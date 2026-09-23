@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.0 - 2026-09-23
+
+### Changed
+
+- Renamed the installed CLI from `chatcoolify` to `coolify`; the `chatcoolify` executable is no longer installed.
+- Kept the PyPI distribution name `ChatCoolify`, Python import package `chatcoolify`, and ChatEnv provider identity unchanged.
+
 ## 0.1.1 - 2026-09-23
 
 ### Added

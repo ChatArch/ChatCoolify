@@ -8,6 +8,8 @@ python -m pip install ChatCoolify
 
 ## Configure ChatEnv
 
+The Python import remains `chatcoolify`; the CLI command is `coolify`, with no `chatcoolify` CLI alias.
+
 ```bash
 chatenv init -t coolify -I
 chatenv set COOLIFY_BASE_URL=https://<coolify-url>
@@ -19,14 +21,14 @@ Keep sensitive tokens only in protected configuration or a secret manager.
 ## Read-only operations
 
 ```bash
-chatcoolify --base-url https://<coolify-url> health
-chatcoolify team
-chatcoolify overview
-chatcoolify projects
-chatcoolify project PROJECT_UUID
-chatcoolify applications
-chatcoolify application APPLICATION_UUID
-chatcoolify servers
+coolify --base-url https://<coolify-url> health
+coolify team
+coolify overview
+coolify projects
+coolify project PROJECT_UUID
+coolify applications
+coolify application APPLICATION_UUID
+coolify servers
 ```
 
 Python usage:
@@ -57,13 +59,13 @@ project = client.create_project("demo-site")
 ```
 
 ```bash
-chatcoolify --allow-write project-create demo-site
+coolify --allow-write project-create demo-site
 ```
 
 Use `website-plan` first, then create only after human approval:
 
 ```bash
-chatcoolify website-plan \
+coolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \

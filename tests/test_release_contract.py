@@ -16,6 +16,8 @@ def test_public_defaults_do_not_target_a_private_instance() -> None:
     )
     assert "https://coolify.example.com" not in public_text
     assert "/home/" not in public_text
+    assert "`chatcoolify " not in public_text
+    assert "\nchatcoolify " not in public_text
 
 
 def test_release_workflow_is_tag_driven_oidc() -> None:
@@ -31,6 +33,8 @@ def test_release_workflow_is_tag_driven_oidc() -> None:
 def test_docs_and_readmes_match_release_identity() -> None:
     pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert 'name = "ChatCoolify"' in pyproject
+    assert 'coolify = "chatcoolify.cli:main"' in pyproject
+    assert '\nchatcoolify = "chatcoolify.cli:main"' not in pyproject
     assert f'version = "{__version__}"' in pyproject
     assert "https://arch.gh.wzhecnu.cn/ChatCoolify/" in pyproject
     assert (ROOT / "README.en.md").is_file()
@@ -54,6 +58,7 @@ def test_docs_and_readmes_match_release_identity() -> None:
 def test_ci_builds_docs_and_installed_cli() -> None:
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     assert "python -m mkdocs build --strict" in workflow
-    assert "chatcoolify --version" in workflow
-    assert "chatcoolify --tree" in workflow
+    assert "coolify --version" in workflow
+    assert "coolify --tree" in workflow
+    assert "chatcoolify --version" not in workflow
     assert "python scripts/check_public_docs.py" in workflow

@@ -57,7 +57,7 @@ https://APPLICATION_UUID.cool.wzhecnu.cn
 先生成计划：
 
 ```bash
-chatcoolify website-plan \
+coolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
@@ -69,7 +69,7 @@ chatcoolify website-plan \
 确认 Project、Server、Environment、Repository 和自动域名策略后再创建：
 
 ```bash
-chatcoolify --allow-write website-create \
+coolify --allow-write website-create \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \

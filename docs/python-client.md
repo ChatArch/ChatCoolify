@@ -8,6 +8,8 @@ python -m pip install ChatCoolify
 
 ## ChatEnv 配置
 
+Python import 继续使用 `chatcoolify`；CLI 命令使用 `coolify`，没有 `chatcoolify` CLI 别名。
+
 ```bash
 chatenv init -t coolify -I
 chatenv set COOLIFY_BASE_URL=https://<coolify-url>
@@ -19,14 +21,14 @@ chatenv set COOLIFY_API_TOKEN='<team-scoped-token>'
 ## 只读操作
 
 ```bash
-chatcoolify --base-url https://<coolify-url> health
-chatcoolify team
-chatcoolify overview
-chatcoolify projects
-chatcoolify project PROJECT_UUID
-chatcoolify applications
-chatcoolify application APPLICATION_UUID
-chatcoolify servers
+coolify --base-url https://<coolify-url> health
+coolify team
+coolify overview
+coolify projects
+coolify project PROJECT_UUID
+coolify applications
+coolify application APPLICATION_UUID
+coolify servers
 ```
 
 Python 调用：
@@ -57,13 +59,13 @@ project = client.create_project("demo-site")
 ```
 
 ```bash
-chatcoolify --allow-write project-create demo-site
+coolify --allow-write project-create demo-site
 ```
 
 先用 `website-plan` 输出资源计划，再由人确认后创建：
 
 ```bash
-chatcoolify website-plan \
+coolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \

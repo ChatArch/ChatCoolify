@@ -21,16 +21,16 @@ ChatCoolify does not replace Coolify. It turns the official REST API into a test
 
 ```bash
 python -m pip install --upgrade ChatCoolify
-chatcoolify --version
-chatcoolify --tree
+coolify --version
+coolify --tree
 ```
 
-Python `>=3.10` is supported.
+Python `>=3.10` is supported. The distribution remains `ChatCoolify` and the Python import remains `chatcoolify`; `coolify` is the only installed CLI, with no `chatcoolify` command alias.
 
 ## Quick start
 
 ```bash
-chatcoolify --base-url https://<coolify-url> health
+coolify --base-url https://<coolify-url> health
 ```
 
 For protected API calls, create a least-privilege team-scoped token in Coolify and configure ChatEnv:
@@ -39,13 +39,13 @@ For protected API calls, create a least-privilege team-scoped token in Coolify a
 chatenv init -t coolify -I
 chatenv set COOLIFY_BASE_URL=https://<coolify-url>
 chatenv set COOLIFY_API_TOKEN='<team-scoped-token>'
-chatcoolify overview
+coolify overview
 ```
 
 ## Website plan example
 
 ```bash
-chatcoolify website-plan \
+coolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
@@ -57,7 +57,7 @@ When `--domain` is omitted, the plan asks Coolify to allocate a unique tenant UR
 The command only renders an official API payload. Creating a resource requires both a `write` token and an explicit local gate:
 
 ```bash
-chatcoolify --allow-write website-create ...
+coolify --allow-write website-create ...
 ```
 
 ## Safety boundary

@@ -1,9 +1,9 @@
 # CLI tree
 
-The ChatCoolify tree comes from the registered Click command surface:
+The ChatCoolify distribution and Python import keep their names. The installed CLI is `coolify`, with no `chatcoolify` command alias. Its tree comes from the registered Click surface:
 
 ```text
-chatcoolify
+coolify
 |- --help
 |- --version
 |- --tree

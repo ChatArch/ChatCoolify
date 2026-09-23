@@ -31,9 +31,9 @@ jobs:
         run: python -m pytest -q
       - name: Installed CLI smoke
         run: |
-          chatcoolify --version
-          chatcoolify --tree
-          chatcoolify --tree-brief
+          coolify --version
+          coolify --tree
+          coolify --tree-brief
       - name: Build docs
         run: python -m mkdocs build --strict
       - name: Build package
