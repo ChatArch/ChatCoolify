@@ -34,6 +34,8 @@ def test_docs_and_readmes_match_release_identity() -> None:
     assert f'version = "{__version__}"' in pyproject
     assert "https://arch.gh.wzhecnu.cn/ChatCoolify/" in pyproject
     assert (ROOT / "README.en.md").is_file()
+    assert (ROOT / "docs/assets/cases/coolifyhello-release-4.png").is_file()
+    assert (ROOT / "docs/assets/cases/coolifyhello-release-4-commit.png").is_file()
     for stem in (
         "index",
         "registration",
@@ -42,6 +44,7 @@ def test_docs_and_readmes_match_release_identity() -> None:
         "cli-tree",
         "capability-map",
         "simple-website",
+        "self-service-demo",
         "full-stack",
         "operations",
     ):

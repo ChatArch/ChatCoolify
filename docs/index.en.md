@@ -36,6 +36,14 @@ ChatCoolify is a safety-focused Python client and AI automation boundary for the
 
     [Examples](simple-website.md)
 
+-   :material-check-decagram-outline: **Verified release evidence**
+
+    ---
+
+    Inspect a real Release 4 from Git push through automatic tenant-domain allocation to a stable HTTPS URL.
+
+    [Verified demo](self-service-demo.md)
+
 </div>
 
 ## Good fit

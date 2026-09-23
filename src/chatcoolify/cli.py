@@ -134,6 +134,18 @@ def projects(ctx: click.Context) -> None:
         _handle_error(error)
 
 
+@main.command("project")
+@click.argument("project_uuid")
+@click.pass_context
+def project(ctx: click.Context, project_uuid: str) -> None:
+    """Show one project and its environments by UUID."""
+
+    try:
+        _emit(_client(ctx).get_project(project_uuid))
+    except CoolifyError as error:
+        _handle_error(error)
+
+
 @main.command("applications")
 @click.pass_context
 def applications(ctx: click.Context) -> None:
@@ -141,6 +153,18 @@ def applications(ctx: click.Context) -> None:
 
     try:
         _emit(_client(ctx).list_applications())
+    except CoolifyError as error:
+        _handle_error(error)
+
+
+@main.command("application")
+@click.argument("application_uuid")
+@click.pass_context
+def application(ctx: click.Context, application_uuid: str) -> None:
+    """Show one application, including its allocated domain and status."""
+
+    try:
+        _emit(_client(ctx).get_application(application_uuid))
     except CoolifyError as error:
         _handle_error(error)
 
@@ -195,6 +219,7 @@ def _website_spec(
     domain: str | None,
     publish_directory: str | None,
     port: int | None,
+    health_check_path: str | None,
     spa: bool,
 ) -> PublicApplicationSpec:
     return PublicApplicationSpec(
@@ -211,6 +236,7 @@ def _website_spec(
         is_static=build_pack == "static",
         is_spa=spa,
         port=port,
+        health_check_path=health_check_path,
     )
 
 
@@ -229,9 +255,14 @@ def _website_options(function):
             show_default=True,
         ),
         click.option("--name", default=None),
-        click.option("--domain", default=None, help="Full HTTPS domain, for example https://site.example.com"),
+        click.option(
+            "--domain",
+            default=None,
+            help="Optional full HTTPS domain. Omit it to request Coolify's unique wildcard-pool domain.",
+        ),
         click.option("--publish-directory", default="dist", show_default=True),
         click.option("--port", type=click.IntRange(min=1, max=65535), default=None),
+        click.option("--health-check-path", default=None, help="Optional HTTP health-check path, for example /health."),
         click.option("--spa/--no-spa", default=True, show_default=True),
     ]
     for option in reversed(options):

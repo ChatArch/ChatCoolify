@@ -49,9 +49,10 @@ chatcoolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
-  --repository-url https://github.com/example/simple-site \
-  --domain https://site.example.com
+  --repository-url https://github.com/example/simple-site
 ```
+
+省略 `--domain` 时，计划会请求 Coolify 从已配置的泛域名池自动分配唯一 tenant URL；需要自定义域名时才显式传入 `--domain`。查看完整的 [真实 Git 到 HTTPS 演示](https://arch.gh.wzhecnu.cn/ChatCoolify/self-service-demo/)。
 
 该命令只输出官方 API payload。真正创建资源需要同时具备 `write` Token 和显式写门：
 

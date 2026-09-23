@@ -26,11 +26,13 @@ def test_version_and_registered_tree_are_available() -> None:
     runner = CliRunner()
     version = runner.invoke(main, ["--version"])
     assert version.exit_code == 0, version.output
-    assert "0.1.0" in version.output
+    assert "0.1.1" in version.output
     tree = runner.invoke(main, ["--tree"])
     assert tree.exit_code == 0, tree.output
     assert tree.output.splitlines()[0] == "chatcoolify"
     assert "website-plan" in tree.output
+    assert "project" in tree.output
+    assert "application" in tree.output
     assert "--allow-write" in tree.output
     brief = runner.invoke(main, ["--tree-brief"])
     assert brief.exit_code == 0, brief.output
@@ -66,3 +68,29 @@ def test_website_plan_has_no_write_side_effect() -> None:
     assert payload["endpoint"] == "/api/v1/applications/public"
     assert payload["payload"]["instant_deploy"] is False
     assert payload["payload"]["is_static"] is True
+    assert payload["payload"]["autogenerate_domain"] is False
+
+
+def test_website_plan_requests_a_wildcard_domain_when_omitted() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "website-plan",
+            "--project-uuid",
+            "project-1",
+            "--server-uuid",
+            "server-1",
+            "--environment-uuid",
+            "environment-1",
+            "--repository-url",
+            "https://github.com/example/site",
+            "--health-check-path",
+            "/health",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    payload = json.loads(result.output)["payload"]
+    assert "domains" not in payload
+    assert payload["autogenerate_domain"] is True
+    assert payload["health_check_enabled"] is True
+    assert payload["health_check_path"] == "/health"

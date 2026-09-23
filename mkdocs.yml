@@ -41,6 +41,7 @@ plugins:
             AI 接入: AI Integration
             接口地图: Interface Map
             使用示例: Examples
+            真实演示: Verified Demo
             运维与安全: Operations and Safety
   - minify:
       minify_html: true
@@ -82,5 +83,6 @@ nav:
       - 能力地图: capability-map.md
   - 使用示例:
       - 托管简单网站: simple-website.md
+      - 真实演示: self-service-demo.md
       - 前后端与数据库: full-stack.md
   - 运维与安全: operations.md

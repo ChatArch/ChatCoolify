@@ -36,6 +36,14 @@ ChatCoolify 是官方 Coolify REST API 的安全 Python 客户端与 AI 自动�
 
     [使用示例](simple-website.md)
 
+-   :material-check-decagram-outline: **真实上线证据**
+
+    ---
+
+    查看一个从 Git 推送、自动 tenant 域名到稳定 HTTPS URL 的实际 Release 4。
+
+    [真实演示](self-service-demo.md)
+
 </div>
 
 ## 适合什么
