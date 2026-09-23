@@ -30,7 +30,7 @@ def _render_tree(command: click.Group, *, brief: bool) -> str:
     """Render the registered CLI surface instead of maintaining docs by hand."""
 
     options = ["--help", "--version", "--tree", "--tree-brief", "--base-url", "--allow-write"]
-    lines = [command.name or "chatcoolify"]
+    lines = [command.name or "coolify"]
     for option in options:
         lines.append(f"|- {option}")
     commands = sorted(command.commands.values(), key=lambda item: item.name)
@@ -51,8 +51,8 @@ def _tree_callback(brief: bool):
     return callback
 
 
-@click.group(name="chatcoolify", context_settings=CONTEXT_SETTINGS)
-@click.version_option(__version__, prog_name="chatcoolify")
+@click.group(name="coolify", context_settings=CONTEXT_SETTINGS)
+@click.version_option(__version__, prog_name="coolify")
 @click.option("--tree", is_flag=True, is_eager=True, expose_value=False, callback=_tree_callback(False), help="Print the registered command tree.")
 @click.option("--tree-brief", is_flag=True, is_eager=True, expose_value=False, callback=_tree_callback(True), help="Print the registered command tree without descriptions.")
 @click.option(

@@ -1,9 +1,9 @@
 # CLI 树
 
-ChatCoolify 的 CLI 树来自实际 Click 注册表：
+ChatCoolify 的发布包与 Python import 保持原名；安装后的 CLI 是 `coolify`，不提供 `chatcoolify` 命令别名。CLI 树来自实际 Click 注册表：
 
 ```text
-chatcoolify
+coolify
 |- --help
 |- --version
 |- --tree

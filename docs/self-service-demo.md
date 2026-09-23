@@ -77,10 +77,10 @@ git push -u origin main
 先创建 Project，再读取其由 Coolify 创建的 `production` Environment。所有写入都必须显式提供 `--allow-write`：
 
 ```bash
-chatcoolify --allow-write project-create "My website" \
+coolify --allow-write project-create "My website" \
   --description "Public website"
 
-chatcoolify project PROJECT_UUID
+coolify project PROJECT_UUID
 ```
 
 第二条命令返回 `environments`；取出 `production` 的 UUID。
@@ -90,7 +90,7 @@ chatcoolify project PROJECT_UUID
 关键点是**不传 `--domain`**。计划会明确包含 `"autogenerate_domain": true`，由平台从 `cool` 域名池分配唯一地址：
 
 ```bash
-chatcoolify website-plan \
+coolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
@@ -106,7 +106,7 @@ chatcoolify website-plan \
 确认 Project、Server、Environment、仓库和 Build Pack 后，执行同一份参数：
 
 ```bash
-chatcoolify --allow-write website-create \
+coolify --allow-write website-create \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
@@ -121,9 +121,9 @@ chatcoolify --allow-write website-create \
 返回的应用 UUID 是读取自动域名、状态、部署历史和后续部署的稳定标识：
 
 ```bash
-chatcoolify application APPLICATION_UUID
-chatcoolify deployments APPLICATION_UUID
-chatcoolify --allow-write deploy APPLICATION_UUID
+coolify application APPLICATION_UUID
+coolify deployments APPLICATION_UUID
+coolify --allow-write deploy APPLICATION_UUID
 ```
 
 `application` 输出中的 `fqdn` 是 Coolify 分配的地址；公网入口会把 HTTP 自动升级为 HTTPS。
@@ -137,16 +137,16 @@ chatcoolify --allow-write deploy APPLICATION_UUID
 3. GitHub push webhook 自动通知 Coolify；
 4. Coolify 自动排队、构建并完成该提交的部署，部署记录标记为 `is_webhook=true`；
 5. 同一个 HTTPS 地址返回 Release 4 页面和 `/health`；
-6. `chatcoolify deployments APPLICATION_UUID` 返回该提交的 `finished` 状态。
+6. `coolify deployments APPLICATION_UUID` 返回该提交的 `finished` 状态。
 
-已配置 Git Provider webhook 的仓库不需要 Agent 或用户再调用 deploy。若仓库尚未配置 webhook，授权用户仍可在 Coolify UI 或通过显式 `chatcoolify --allow-write deploy` 触发；两种方式都不会改变平台分配的 URL。
+已配置 Git Provider webhook 的仓库不需要 Agent 或用户再调用 deploy。若仓库尚未配置 webhook，授权用户仍可在 Coolify UI 或通过显式 `coolify --allow-write deploy` 触发；两种方式都不会改变平台分配的 URL。
 
 ## 验收清单
 
 ```bash
 curl --fail https://APPLICATION_UUID.cool.wzhecnu.cn/health
 curl --fail https://APPLICATION_UUID.cool.wzhecnu.cn/
-chatcoolify deployments APPLICATION_UUID
+coolify deployments APPLICATION_UUID
 ```
 
 确认：

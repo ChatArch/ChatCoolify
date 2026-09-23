@@ -21,16 +21,16 @@ ChatCoolify 不替代 Coolify，而是把官方 REST API 变成可测试的 Pyth
 
 ```bash
 python -m pip install --upgrade ChatCoolify
-chatcoolify --version
-chatcoolify --tree
+coolify --version
+coolify --tree
 ```
 
-支持 Python `>=3.10`。
+支持 Python `>=3.10`。发布包仍叫 `ChatCoolify`，Python import 仍是 `chatcoolify`；安装后的唯一 CLI 是 `coolify`，不提供 `chatcoolify` 命令别名。
 
 ## 最快开始
 
 ```bash
-chatcoolify --base-url https://<coolify-url> health
+coolify --base-url https://<coolify-url> health
 ```
 
 需要受保护 API 时，先在 Coolify 创建 Team-scoped 最小权限 Token，再通过 ChatEnv 配置：
@@ -39,13 +39,13 @@ chatcoolify --base-url https://<coolify-url> health
 chatenv init -t coolify -I
 chatenv set COOLIFY_BASE_URL=https://<coolify-url>
 chatenv set COOLIFY_API_TOKEN='<team-scoped-token>'
-chatcoolify overview
+coolify overview
 ```
 
 ## 网站计划示例
 
 ```bash
-chatcoolify website-plan \
+coolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
@@ -57,7 +57,7 @@ chatcoolify website-plan \
 该命令只输出官方 API payload。真正创建资源需要同时具备 `write` Token 和显式写门：
 
 ```bash
-chatcoolify --allow-write website-create ...
+coolify --allow-write website-create ...
 ```
 
 ## 安全边界

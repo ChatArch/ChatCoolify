@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "ChatCoolify"
-version = "0.1.1"
+version = "0.2.0"
 description = "AI-safe Python client and CLI for the official Coolify API"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -32,7 +32,7 @@ Repository = "https://github.com/ChatArch/ChatCoolify"
 Issues = "https://github.com/ChatArch/ChatCoolify/issues"
 
 [project.scripts]
-chatcoolify = "chatcoolify.cli:main"
+coolify = "chatcoolify.cli:main"
 
 [project.entry-points."chatenv.configs"]
 chatcoolify = "chatcoolify.config"

@@ -32,7 +32,7 @@
 
 | Symptom | First action |
 | --- | --- |
-| Control plane unavailable | Run `chatcoolify health` |
+| Control plane unavailable | Run `coolify health` |
 | 401 | Check token completeness, expiry, and revocation |
 | 403 | Check team, permission, API Access, and IP allowlist |
 | 422 | Correct request fields; do not replay writes blindly |

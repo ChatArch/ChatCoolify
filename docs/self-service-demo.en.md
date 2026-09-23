@@ -77,10 +77,10 @@ git push -u origin main
 Create the project, then read the `production` environment that Coolify creates. Every write requires an explicit `--allow-write` gate:
 
 ```bash
-chatcoolify --allow-write project-create "My website" \
+coolify --allow-write project-create "My website" \
   --description "Public website"
 
-chatcoolify project PROJECT_UUID
+coolify project PROJECT_UUID
 ```
 
 The second command returns `environments`; take the UUID for `production`.
@@ -90,7 +90,7 @@ The second command returns `environments`; take the UUID for `production`.
 The important detail is to **omit `--domain`**. The plan explicitly contains `"autogenerate_domain": true`, asking the platform's `cool` domain pool for a unique address:
 
 ```bash
-chatcoolify website-plan \
+coolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
@@ -106,7 +106,7 @@ chatcoolify website-plan \
 After confirming the project, server, environment, repository, and build pack, run the same parameters:
 
 ```bash
-chatcoolify --allow-write website-create \
+coolify --allow-write website-create \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
@@ -121,9 +121,9 @@ chatcoolify --allow-write website-create \
 The returned application UUID is the stable identifier for reading the allocated domain, status, deployment history, and future deployments:
 
 ```bash
-chatcoolify application APPLICATION_UUID
-chatcoolify deployments APPLICATION_UUID
-chatcoolify --allow-write deploy APPLICATION_UUID
+coolify application APPLICATION_UUID
+coolify deployments APPLICATION_UUID
+coolify --allow-write deploy APPLICATION_UUID
 ```
 
 The `fqdn` field from `application` is the Coolify-allocated address; the public ingress upgrades HTTP to HTTPS automatically.
@@ -137,16 +137,16 @@ The final automatic release in this case followed this path:
 3. The GitHub push webhook notifies Coolify automatically.
 4. Coolify queues, builds, and completes that commit; the deployment record has `is_webhook=true`.
 5. The same HTTPS address returns Release 4 and `/health`.
-6. `chatcoolify deployments APPLICATION_UUID` reports that commit as `finished`.
+6. `coolify deployments APPLICATION_UUID` reports that commit as `finished`.
 
-A repository with a configured Git-provider webhook needs no Agent or user deploy call after a push. Without a webhook, an authorized user can still trigger deployment through the Coolify UI or explicit `chatcoolify --allow-write deploy`; neither path changes the platform-allocated URL.
+A repository with a configured Git-provider webhook needs no Agent or user deploy call after a push. Without a webhook, an authorized user can still trigger deployment through the Coolify UI or explicit `coolify --allow-write deploy`; neither path changes the platform-allocated URL.
 
 ## Acceptance checklist
 
 ```bash
 curl --fail https://APPLICATION_UUID.cool.wzhecnu.cn/health
 curl --fail https://APPLICATION_UUID.cool.wzhecnu.cn/
-chatcoolify deployments APPLICATION_UUID
+coolify deployments APPLICATION_UUID
 ```
 
 Confirm that:

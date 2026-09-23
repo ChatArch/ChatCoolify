@@ -57,7 +57,7 @@ https://APPLICATION_UUID.cool.wzhecnu.cn
 Create a plan first:
 
 ```bash
-chatcoolify website-plan \
+coolify website-plan \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
@@ -69,7 +69,7 @@ chatcoolify website-plan \
 Create only after confirming the project, server, environment, repository, and automatic-domain policy:
 
 ```bash
-chatcoolify --allow-write website-create \
+coolify --allow-write website-create \
   --project-uuid PROJECT_UUID \
   --server-uuid SERVER_UUID \
   --environment-uuid ENVIRONMENT_UUID \
