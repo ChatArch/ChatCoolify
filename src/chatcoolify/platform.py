@@ -318,6 +318,7 @@ class PlatformService:
                 'PLATFORM_CONTROL_URL':self.control_url,'PLATFORM_INTERNAL_URL':self.internal_url,
                 'PLATFORM_PUBLIC_URLS':app['url'],'PLATFORM_ROUTE_ALIASES':app['aliases']})
             self.check(actor,project_id,'deploy')
+            self.sources.retain(project_id,release['source_commit'])
             self.backend.update_application(app['native_uuid'],git_commit_sha=release['source_commit'])
             deployment_id = uuid.uuid4().hex
             with self.connection(True) as db:

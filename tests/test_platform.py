@@ -132,6 +132,24 @@ def test_prior_finished_metadata_is_not_migrated_without_live_proof(setup,tmp_pa
     assert later['verified_at']==verified['verified_at']
 
 
+def test_old_build_commit_survives_native_shallow_fetch_after_main_advances(tmp_path):
+    import subprocess
+    from chatcoolify.platform_source import GitSources
+    sources=GitSources(tmp_path/'repos')
+    old=sources.commit_files('project',{'Dockerfile':b'old'},'first release')
+    new=sources.commit_files('project',{'Dockerfile':b'new'},'second release')
+    repo=sources.path('project')
+    refs=subprocess.check_output(['git','ls-remote',repo.as_uri()],text=True)
+    assert old+'\trefs/tags/chatcoolify-source-'+old in refs
+    clone=tmp_path/'native-clone'
+    subprocess.run(['git','clone','--depth=1','--no-tags','--branch=main',repo.as_uri(),str(clone)],
+        check=True,capture_output=True)
+    assert subprocess.check_output(['git','-C',str(clone),'rev-parse','HEAD'],text=True).strip()==new
+    subprocess.run(['git','-C',str(clone),'fetch','--depth=1','origin',old],check=True,capture_output=True)
+    actual=subprocess.check_output(['git','-C',str(clone),'show','FETCH_HEAD:Dockerfile'])
+    assert actual==b'old'
+
+
 def test_sso_atomic_app_and_transaction_binding_parent_logout_and_revoke(setup,tmp_path):
     s,admin,a,b,pa,pb=setup
     r=s.upload(a,pa['id'],artifact(tmp_path))

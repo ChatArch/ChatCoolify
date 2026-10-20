@@ -23,7 +23,7 @@ coolify platform --profile work rollback PROJECT_ID PREVIOUS_PRODUCTION_RELEASE_
 
 资源返回稳定平台 ID 及经过筛选的 native Team/Project/Environment/Application/Deployment 引用、artifact/Dockerfile digest、实际构建 commit；原目录的原始 commit 与生成的构建 commit 分开。反复调用创建请求和部署请求可复用 `request_key`。派发结果不明时保留状态供核对，不盲目重复队列；日志会过滤凭据和过长构建输入行。
 
-私有 Git source key 仅保留服务器及 Coolify 的密钥资源中，不放进镜像。host SSH forced-command 只允许 `git-upload-pack` 读取源根目录下已登记 bare repo，禁止 shell、写 Git、端口/agent 转发或读取根目录以外路径。需要按已安装 Coolify 的 URL 校验和自定义端口格式核实真实 clone。服务器不提供匿名 Git HTTP/daemon 入口。
+私有 Git source key 仅保留服务器及 Coolify 的密钥资源中，不放进镜像。host SSH forced-command 只允许 `git-upload-pack` 读取源根目录下已登记 bare repo，禁止 shell、写 Git、端口/agent 转发或读取根目录以外路径。每个构建 commit 保留不可变源引用，仓库单独允许读取可达 SHA，供原生浅克隆在 main 前进后按旧 commit 回退。需要按已安装 Coolify 的 URL 校验和自定义端口格式核实真实 clone。服务器不提供匿名 Git HTTP/daemon 入口。
 
 ## 权限和网页登录
 

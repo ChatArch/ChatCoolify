@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import subprocess
 import time
 
@@ -52,7 +53,23 @@ class GitSources:
         stream.extend(b'\ndone\n')
         subprocess.run(['git', '--git-dir', str(repo), 'fast-import', '--quiet'],
                        input=bytes(stream), check=True, capture_output=True)
-        return subprocess.check_output(['git', '--git-dir', str(repo), 'rev-parse', 'refs/heads/main'], text=True).strip()
+        commit=subprocess.check_output(['git', '--git-dir', str(repo), 'rev-parse', 'refs/heads/main'], text=True).strip()
+        self.retain(project_id,commit)
+        return commit
+
+    def retain(self,project_id,commit):
+        """Keep a release fetchable by native shallow clones after main advances."""
+        if not re.fullmatch(r'[0-9a-f]{40}',commit):
+            raise ValueError('Invalid build commit')
+        repo=self.path(project_id)
+        subprocess.run(['git','--git-dir',str(repo),'cat-file','-e',commit+'^{commit}'],
+            check=True,capture_output=True)
+        subprocess.run(['git','--git-dir',str(repo),'update-ref','refs/tags/chatcoolify-source-'+commit,commit],
+            check=True,capture_output=True)
+        # Coolify fetches the pinned SHA with depth=1. The older commit is still
+        # reachable, but some upload-pack versions reject an unadvertised want.
+        subprocess.run(['git','--git-dir',str(repo),'config','uploadpack.allowReachableSHA1InWant','true'],
+            check=True,capture_output=True)
 
     def frontend(self, project_id, archive):
         files,docker_digest=frontend_files(archive)

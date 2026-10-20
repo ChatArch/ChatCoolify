@@ -23,7 +23,7 @@ The SDK exposes stable platform IDs and sanitized native Team/Project/Environmen
 
 `runtime_verified` and `verified_at` persist evidence that this deployment was actually verified; `runtime_active` describes the current probe. Verified historical deployments retain successful status. An older deployment that was never verified becomes `superseded_unverified` and cannot authorize rollback. Upgrades do not treat legacy `finished` metadata as verification evidence; an active version can acquire proof through a live probe. Rollback requires a previously verified production release in the same project.
 
-Source keys stay in server/Coolify secret storage, outside application images. An SSH forced command only permits read-only `git-upload-pack` beneath the registered source root, rejecting shell access, writes and forwarding. Verify repository URL and custom-port syntax against the installed native version. No anonymous Git HTTP/daemon endpoint is provided.
+Source keys stay in server/Coolify secret storage, outside application images. An SSH forced command only permits read-only `git-upload-pack` beneath the registered source root, rejecting shell access, writes and forwarding. Each build commit retains an immutable source ref; the individual repository allows reachable-SHA fetches so native shallow clones can roll back after main advances. Verify repository URL and custom-port syntax against the installed native version. No anonymous Git HTTP/daemon endpoint is provided.
 
 ## Identity and access
 
