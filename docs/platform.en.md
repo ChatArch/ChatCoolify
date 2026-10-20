@@ -1,0 +1,49 @@
+# Local project platform
+
+`coolify platform` supports invited trusted collaborators: register a frontend project, upload a built local directory, inspect a preview, explicitly publish, view native logs and roll back. Independent backends remain native Coolify applications/services and can be associated with a project. The existing `CoolifyClient` and Git/backend API remain available.
+
+```bash
+coolify platform --profile work login --url https://<platform-origin> --username <account>
+coolify platform --profile work projects create my-site --visibility private
+coolify platform --profile work upload PROJECT_ID ./dist
+coolify platform --profile work preview PROJECT_ID RELEASE_ID
+coolify platform --profile work status PROJECT_ID
+coolify platform --profile work publish PROJECT_ID RELEASE_ID
+coolify platform --profile work logs PROJECT_ID DEPLOYMENT_ID
+coolify platform --profile work rollback PROJECT_ID PREVIOUS_PRODUCTION_RELEASE_ID
+```
+
+Passwords are entered through a hidden prompt or an environment variable named by `--password-env`. ChatEnv owns named endpoint profiles; TokenStore owns opaque sessions. Named profile selection does not change another active profile. Uploads exclude hidden files such as `.env` and `.git`, reject symlinks, credentials and reserved/traversal paths, and require `index.html`. Limits: 2,000 files, 8 MiB ZIP and 32 MiB expanded content. Arbitrary user Dockerfiles are not accepted.
+
+## Native execution and provenance
+
+The broker writes the artifact, controlled Dockerfile and reusable runtime into a private bare Git commit on the server. Native Coolify private-deploy-key applications build and run immutable images from that commit. Preview and production are separate native applications; upload alone does not alter production. Selected releases are explicitly published or rolled back through native deployments, never by switching a host-directory pointer. Successful status reconciles the native record and actual runtime artifact digest.
+
+The SDK exposes stable platform IDs and sanitized native Team/Project/Environment/Application/Deployment references, artifact/Dockerfile digests and actual build commit. Optional original repository attribution is separate. Reuse request keys after interrupted requests; ambiguous dispatch is retained for reconciliation instead of blindly queued again. Sensitive or oversized build log lines are omitted.
+
+Source keys stay in server/Coolify secret storage, outside application images. An SSH forced command only permits read-only `git-upload-pack` beneath the registered source root, rejecting shell access, writes and forwarding. Verify repository URL and custom-port syntax against the installed native version. No anonymous Git HTTP/daemon endpoint is provided.
+
+## Identity and access
+
+Owners grant viewer/deployer collaboration; deployers preview, publish and roll back. Account administrators provision/disable accounts but have no implicit access to another project's content, deployments or service bindings. Every native target is derived from an authorized project mapping. Ordinary accounts never receive a shared Team token.
+
+The same runtime guards every private HTML/JS/asset/export/service request, including raw native domains. Public read does not grant publishing or management. Private reads revalidate the account, reader session, central parent session and current project ACL, failing closed on authorization outage.
+
+Control and app reader cookies are independent host-only Secure/HttpOnly cookies. Each app starts a 120-second `__Host-` state/nonce transaction, Path=/, no Domain, SameSite=Lax. Codes bind the app, state and central session and are consumed atomically. The single auto-POST callback requires the exact central Origin plus matching app cookie/form state; all other writes require same-origin CSRF. This protocol currently covers same-site HTTPS origins, not cross-site custom domains. Central logout invalidates children; account disable and project revocation affect existing readers. ChatLogin remains an embedded identity library; the platform host implements this issuer/reader protocol.
+
+## SDK and services
+
+```python
+from chatcoolify import PlatformClient
+
+client = PlatformClient.from_profile("work")
+project = client.create_project("another-site")
+release = client.upload(project["id"], "./dist")
+preview = client.deploy(project["id"], release["id"], environment="preview")
+```
+
+`PlatformService` and `CoolifyBackend` are importable host APIs. Project owners use `services list PROJECT_ID --candidates`, then `services register` with an opaque candidate ID verified under that native project. Arbitrary URLs, host paths and other-project native UUIDs are rejected. The first transport adapter supports ChatComment request-bound signed site permissions, independently checked by the backend, including its raw native origin.
+
+Operators configure the `coolify-platform-server` typed profile and run `coolify platform serve`. `bootstrap-owner` is server CLI only; there is no public signup/bootstrap route. The control plane itself should run as a native Coolify application with persistent identity/metadata/source storage and no Docker socket. Ordinary frontend apps have no host mounts.
+
+Back up consistent ChatLogin/platform SQLite snapshots, private bare Git, immutable artifacts and private server configuration. Preserve reachable Git history/releases until an explicit retention policy exists; do not prune rollback sources automatically. Independent-service data remains on its own persistent mount, unaffected by frontend rollback. Verify new native resources and data before retiring an old entry.

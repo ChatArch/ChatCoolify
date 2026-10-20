@@ -371,7 +371,10 @@ def _error_message(error: HTTPError, token: str | None) -> str:
         raw = error.read().decode("utf-8", errors="replace")
         parsed = json.loads(raw)
         if isinstance(parsed, Mapping) and isinstance(parsed.get("message"), str):
-            return _redact_sensitive_text(parsed["message"], token)[:500]
+            fields = parsed.get('errors', {})
+            safe_fields = [key for key in fields if isinstance(key,str) and re.fullmatch(r'[A-Za-z0-9_.]{1,80}',key)] if isinstance(fields,Mapping) else []
+            suffix = ' (fields: ' + ', '.join(safe_fields[:20]) + ')' if safe_fields else ''
+            return _redact_sensitive_text(parsed["message"], token)[:500] + suffix
     except (OSError, UnicodeDecodeError, json.JSONDecodeError):
         pass
     return _redact_sensitive_text(str(error.reason or "request failed"), token)

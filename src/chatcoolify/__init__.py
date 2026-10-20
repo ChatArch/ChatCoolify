@@ -10,7 +10,12 @@ from .client import (
     PublicApplicationSpec,
 )
 
-__version__ = "0.2.0"
+__version__ = "0.2.1"
+
+from .platform import PlatformService
+from .platform_client import PlatformClient
+from .platform_artifact import PlatformError
+from .platform_backend import CoolifyBackend
 
 __all__ = [
     "DEFAULT_BASE_URL",
@@ -20,5 +25,9 @@ __all__ = [
     "CoolifyError",
     "CoolifyPermissionError",
     "PublicApplicationSpec",
+    "PlatformService",
+    "PlatformClient",
+    "PlatformError",
+    "CoolifyBackend",
     "__version__",
 ]
