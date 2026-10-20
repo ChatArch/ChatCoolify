@@ -26,7 +26,8 @@ def test_version_and_registered_tree_are_available() -> None:
     runner = CliRunner()
     version = runner.invoke(main, ["--version"])
     assert version.exit_code == 0, version.output
-    assert "0.2.0" in version.output
+    from chatcoolify import __version__
+    assert __version__ in version.output
     tree = runner.invoke(main, ["--tree"])
     assert tree.exit_code == 0, tree.output
     assert tree.output.splitlines()[0] == "coolify"
@@ -40,7 +41,8 @@ def test_version_and_registered_tree_are_available() -> None:
     brief = runner.invoke(main, ["--tree-brief"])
     assert brief.exit_code == 0, brief.output
     assert "website-plan" in brief.output
-    assert "Render a website payload" not in brief.output
+    assert "platform" in brief.output
+    assert "bootstrap-owner" in brief.output
 
 
 def test_project_create_requires_explicit_write_flag() -> None:

@@ -29,6 +29,8 @@ coolify --tree
 
 ## 最快开始
 
+已有平台账号可通过 `coolify platform` 完成本地目录上传、原生预览、显式发布及回退；平台按项目授权，普通用户不持有原生 Team token。见[本地项目平台](docs/platform.md)。以下保留原生 Coolify 客户端用法，其写操作仍需 `--allow-write`。
+
 ```bash
 coolify --base-url https://<coolify-url> health
 ```

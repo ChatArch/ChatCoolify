@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.2.1 - 2026-10-21
+
+### Added
+
+- Importable project platform SDK and `coolify platform` commands for built frontend upload, separate preview/production, explicit publication, native logs and verified-release rollback.
+- ChatLogin account provisioning, project owner/deployer/viewer grants, host-only application SSO and immediate parent-session, account and grant revocation checks.
+- Private Git build inputs, native Coolify resource mapping and runtime artifact verification with persisted deployment evidence; retained source references support pinned shallow-clone rollback.
+- Owner-managed independent-service bindings with request-bound signed ChatComment access and password reauthentication.
+- ChatEnv endpoint profiles, TokenStore sessions, shared ChatStyle command trees and bilingual platform documentation.
+
+### Fixed
+
+- Preserve browser Origin on password and SSO callback forms while rejecting null and foreign origins.
+- Keep never-verified superseded jobs ineligible for rollback; historical native status alone does not create verification evidence.
+
 ## 0.2.0 - 2026-09-23
 
 ### Changed

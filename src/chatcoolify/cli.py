@@ -6,6 +6,7 @@ import json
 from typing import Any
 
 import click
+from chatstyle import add_tree_option
 
 from . import __version__
 from .client import DEFAULT_BASE_URL, CoolifyClient, CoolifyError, PublicApplicationSpec
@@ -26,35 +27,9 @@ def _handle_error(error: CoolifyError) -> None:
     raise click.ClickException(str(error)) from error
 
 
-def _render_tree(command: click.Group, *, brief: bool) -> str:
-    """Render the registered CLI surface instead of maintaining docs by hand."""
-
-    options = ["--help", "--version", "--tree", "--tree-brief", "--base-url", "--allow-write"]
-    lines = [command.name or "coolify"]
-    for option in options:
-        lines.append(f"|- {option}")
-    commands = sorted(command.commands.values(), key=lambda item: item.name)
-    for index, subcommand in enumerate(commands):
-        connector = "`-" if index == len(commands) - 1 else "|-"
-        suffix = "" if brief else f"  # {subcommand.help or subcommand.short_help or ''}".rstrip()
-        lines.append(f"{connector} {subcommand.name}{suffix}")
-    return "\n".join(lines)
-
-
-def _tree_callback(brief: bool):
-    def callback(ctx: click.Context, _param: click.Parameter, value: bool) -> None:
-        if not value or ctx.resilient_parsing:
-            return
-        click.echo(_render_tree(ctx.command, brief=brief))
-        ctx.exit()
-
-    return callback
-
-
 @click.group(name="coolify", context_settings=CONTEXT_SETTINGS)
 @click.version_option(__version__, prog_name="coolify")
-@click.option("--tree", is_flag=True, is_eager=True, expose_value=False, callback=_tree_callback(False), help="Print the registered command tree.")
-@click.option("--tree-brief", is_flag=True, is_eager=True, expose_value=False, callback=_tree_callback(True), help="Print the registered command tree without descriptions.")
+@add_tree_option()
 @click.option(
     "--base-url",
     envvar="COOLIFY_BASE_URL",
@@ -309,6 +284,10 @@ def deploy(ctx: click.Context, application_uuid: str, force: bool) -> None:
         _emit(_client(ctx).deploy(application_uuid, force=force))
     except CoolifyError as error:
         _handle_error(error)
+
+
+from .platform_cli import platform
+main.add_command(platform)
 
 
 if __name__ == "__main__":  # pragma: no cover

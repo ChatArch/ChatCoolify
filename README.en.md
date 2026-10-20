@@ -29,6 +29,8 @@ Python `>=3.10` is supported. The distribution remains `ChatCoolify` and the Pyt
 
 ## Quick start
 
+Invited platform accounts use `coolify platform` for local uploads, native previews, explicit publishing and rollback with per-project permissions. Ordinary users do not hold native Team tokens. See the [local project platform](docs/platform.en.md). The original native client usage below retains its `--allow-write` gate.
+
 ```bash
 coolify --base-url https://<coolify-url> health
 ```
