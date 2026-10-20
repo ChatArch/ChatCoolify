@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.2.2 - 2026-10-21
+
+### Added
+
+- Readable production and preview hostnames derived from project slugs, with owner-managed domain reservations through the Python SDK, HTTP API and `coolify platform domains` commands.
+- Transactional project-wide hostname claims, infrastructure reservations and native application, Compose and service-domain conflict discovery.
+- Staged domain changes activated only after native deployment and runtime/configuration verification; retained old addresses redirect reads to the verified canonical origin.
+- Responsive account website dashboard showing authorized projects, environment addresses, pending domain settings and CSRF-protected logout.
+
+### Fixed
+
+- Preserve existing canonical URLs and successful deployment evidence during metadata migration and staged domain changes, including failed-deployment rollback.
+- Require explicit re-upload when an immutable older runtime cannot safely implement a domain change; never rewrite a historical release silently.
+
 ## 0.2.1 - 2026-10-21
 
 ### Added
