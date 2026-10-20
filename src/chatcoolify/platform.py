@@ -277,7 +277,7 @@ class PlatformService:
                     if prior['release_id']!=release_id or prior['environment']!=environment:
                         raise PlatformError(409,'Idempotency key conflicts with prior deployment')
                     return self.deployment(actor,project_id,prior['id'])
-                active = db.execute("SELECT 1 FROM deployments WHERE project_id=? AND environment=? AND state IN ('dispatching','dispatch_unknown','queued','in_progress','verifying')",(project_id,environment)).fetchone()
+                active = db.execute("SELECT 1 FROM deployments WHERE project_id=? AND environment=? AND state IN ('dispatching','dispatch_unknown','queued','in_progress')",(project_id,environment)).fetchone()
                 if active:
                     raise PlatformError(409,'Reconcile the in-flight deployment before submitting another')
                 if rollback and not db.execute("SELECT 1 FROM deployments WHERE project_id=? AND release_id=? AND environment='production' AND state='finished'",(project_id,release_id)).fetchone():
@@ -304,6 +304,13 @@ class PlatformService:
                         (app_id,project_id,environment,native_uuid,env['uuid'],url,secret))
                 with self.connection() as db:
                     app = db.execute('SELECT * FROM apps WHERE id=?',(app_id,)).fetchone()
+            # Reconcile platform-owned runtime configuration for existing apps too.
+            # Stable aliases avoid relying on Coolify's timestamped container names.
+            self.backend.update_application(app['native_uuid'],custom_network_aliases='platform-front-'+app['id'],
+                connect_to_docker_network=True)
+            self.backend.env(app['native_uuid'],{'PLATFORM_APPLICATION_ID':app['id'],'PLATFORM_APPLICATION_KEY':app['secret'],
+                'PLATFORM_CONTROL_URL':self.control_url,'PLATFORM_INTERNAL_URL':self.internal_url,
+                'PLATFORM_PUBLIC_URLS':app['url'],'PLATFORM_ROUTE_ALIASES':app['aliases']})
             self.check(actor,project_id,'deploy')
             self.backend.update_application(app['native_uuid'],git_commit_sha=release['source_commit'])
             deployment_id = uuid.uuid4().hex

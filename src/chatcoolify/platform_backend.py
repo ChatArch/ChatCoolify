@@ -5,7 +5,7 @@ import hashlib
 import hmac
 import json
 import time
-from urllib.parse import quote
+from urllib.parse import quote,urlsplit
 from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 from .platform_artifact import PlatformError
@@ -96,7 +96,8 @@ class CoolifyBackend:
         class NoRedirect(HTTPRedirectHandler):
             def redirect_request(self,*args):return None
         try:
-            request=Request(url.rstrip('/')+'/__platform/artifact',headers={'X-Platform-Probe':stamp+':'+signature})
+            request=Request('http://platform-front-'+app_id+':8080/__platform/artifact',
+                headers={'Host':urlsplit(url).netloc,'X-Platform-Probe':stamp+':'+signature})
             with build_opener(NoRedirect()).open(request,timeout=15) as response:
                 return json.loads(response.read(1024)).get('artifact_sha256')
         except Exception:return None
