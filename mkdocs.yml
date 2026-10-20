@@ -38,6 +38,7 @@ plugins:
           nav_translations:
             主页: Home
             快速开始: Quick Start
+            本地项目平台: Local Project Platform
             AI 接入: AI Integration
             接口地图: Interface Map
             使用示例: Examples

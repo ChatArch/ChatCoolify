@@ -21,11 +21,15 @@ The broker writes the artifact, controlled Dockerfile and reusable runtime into 
 
 The SDK exposes stable platform IDs and sanitized native Team/Project/Environment/Application/Deployment references, artifact/Dockerfile digests and actual build commit. Optional original repository attribution is separate. Reuse request keys after interrupted requests; ambiguous dispatch is retained for reconciliation instead of blindly queued again. Sensitive or oversized build log lines are omitted.
 
+`runtime_verified` and `verified_at` persist evidence that this deployment was actually verified; `runtime_active` describes the current probe. Verified historical deployments retain successful status. An older deployment that was never verified becomes `superseded_unverified` and cannot authorize rollback. Upgrades do not treat legacy `finished` metadata as verification evidence; an active version can acquire proof through a live probe. Rollback requires a previously verified production release in the same project.
+
 Source keys stay in server/Coolify secret storage, outside application images. An SSH forced command only permits read-only `git-upload-pack` beneath the registered source root, rejecting shell access, writes and forwarding. Verify repository URL and custom-port syntax against the installed native version. No anonymous Git HTTP/daemon endpoint is provided.
 
 ## Identity and access
 
 Owners grant viewer/deployer collaboration; deployers preview, publish and roll back. Account administrators provision/disable accounts but have no implicit access to another project's content, deployments or service bindings. Every native target is derived from an authorized project mapping. Ordinary accounts never receive a shared Team token.
+
+Invitation-only currently means an administrator runs `users create` and privately shares the initial password. There is no invitation email, invitation token or acceptance page. Native Coolify Pending invitations belong to its separate Team system; platform users do not automatically join that Team.
 
 The same runtime guards every private HTML/JS/asset/export/service request, including raw native domains. Public read does not grant publishing or management. Private reads revalidate the account, reader session, central parent session and current project ACL, failing closed on authorization outage.
 

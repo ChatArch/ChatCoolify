@@ -19,6 +19,8 @@ coolify platform --profile work rollback PROJECT_ID PREVIOUS_PRODUCTION_RELEASE_
 
 上传产物、统一 Dockerfile 和 runtime 形成服务器私有 bare Git commit。原生 Coolify private-deploy-key 应用按该 commit 构建镜像和运行容器；没有另外的 host 静态目录版本指针。preview 和 production 是两个原生应用。发布/回退必须选择不可变 release；上传不会提前改变 production。失败按原生构建/健康记录呈现，成功状态还核对运行中的 artifact digest。
 
+`runtime_verified` / `verified_at` 保存该次部署曾实际核对成功的证据，`runtime_active` 表示本次查询是否仍是活动版本。已验证的历史部署保留成功记录；从未验证且已被新部署替代的记录为 `superseded_unverified`，不允许回退。升级不把旧 `finished` 状态批量视为验证证据；当前运行版本可通过真实探测补证。回退仅接受同项目曾验证成功的正式 release。
+
 资源返回稳定平台 ID 及经过筛选的 native Team/Project/Environment/Application/Deployment 引用、artifact/Dockerfile digest、实际构建 commit；原目录的原始 commit 与生成的构建 commit 分开。反复调用创建请求和部署请求可复用 `request_key`。派发结果不明时保留状态供核对，不盲目重复队列；日志会过滤凭据和过长构建输入行。
 
 私有 Git source key 仅保留服务器及 Coolify 的密钥资源中，不放进镜像。host SSH forced-command 只允许 `git-upload-pack` 读取源根目录下已登记 bare repo，禁止 shell、写 Git、端口/agent 转发或读取根目录以外路径。需要按已安装 Coolify 的 URL 校验和自定义端口格式核实真实 clone。服务器不提供匿名 Git HTTP/daemon 入口。
@@ -26,6 +28,8 @@ coolify platform --profile work rollback PROJECT_ID PREVIOUS_PRODUCTION_RELEASE_
 ## 权限和网页登录
 
 owner 可授权 viewer/deployer；deployer 可预览、发布和回退，viewer 可阅读。账号 admin 负责邀请/停用用户，没有他人项目的隐式阅读、部署或 service-binding 修改权。所有 native 执行目标均从已授权项目映射推导。不要把原生 Team token 发给普通协作者。
+
+当前“邀请制”通过管理员执行 `users create` 人工开通账号并私下安全交付初始密码；没有邀请邮件、邀请 token 或接受邀请页面。原生 Coolify 的 Pending invitations 属于另一套 Team 管理，平台用户不会自动成为原生 Team 成员。
 
 每个前端镜像中的通用 runtime 在读取 HTML、JS、资源、导出和服务前检查策略，原始自动域名也受相同保护。public 只开放页面读取，不开放部署或管理；private 逐请求检查账号、reader 会话、中央父会话和当前项目授权，平台不可用时拒绝。
 

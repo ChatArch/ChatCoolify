@@ -34,7 +34,7 @@ class PlatformHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Length',str(len(body)))
         self.send_header('Cache-Control','private, no-store')
         self.send_header('X-Content-Type-Options','nosniff')
-        self.send_header('Referrer-Policy','no-referrer')
+        self.send_header('Referrer-Policy','strict-origin-when-cross-origin')
         self.send_header('X-Frame-Options','DENY')
         for key,value in (headers or {}).items():
             for item in value if isinstance(value,list) else [value]:self.send_header(key,item)
@@ -129,7 +129,7 @@ class PlatformHandler(BaseHTTPRequestHandler):
         if not application:return self.respond(303,b'',headers={**headers,'Location':'/'})
         ticket=self.service.issue_ticket(token,application,state,target)
         nonce=secrets.token_urlsafe(24)
-        page=(f'<!doctype html><meta name="referrer" content="no-referrer"><title>正在返回项目</title>'
+        page=(f'<!doctype html><meta name="referrer" content="strict-origin-when-cross-origin"><title>正在返回项目</title>'
             f'<form method="post" action="{html.escape(ticket["callback"],quote=True)}">'
             f'<input type="hidden" name="code" value="{ticket["code"]}"><input type="hidden" name="state" value="{state}">'
             f'<button>继续</button></form><script nonce="{nonce}">document.forms[0].submit()</script>').encode()

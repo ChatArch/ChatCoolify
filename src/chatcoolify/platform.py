@@ -65,6 +65,8 @@ class PlatformService:
               CREATE TABLE IF NOT EXISTS deployments(id TEXT PRIMARY KEY,project_id TEXT,release_id TEXT,
                 environment TEXT,native_uuid TEXT,state TEXT,created_at REAL,request_key TEXT,action TEXT,
                 UNIQUE(project_id,request_key));
+              CREATE TABLE IF NOT EXISTS deployment_verifications(deployment_id TEXT PRIMARY KEY,
+                artifact_sha256 TEXT NOT NULL,source_commit TEXT NOT NULL,verified_at REAL NOT NULL);
               CREATE TABLE IF NOT EXISTS controls(digest TEXT PRIMARY KEY,user_id TEXT,expires REAL,active INTEGER);
               CREATE TABLE IF NOT EXISTS readers(digest TEXT PRIMARY KEY,app_id TEXT,parent TEXT,expires REAL);
               CREATE TABLE IF NOT EXISTS tickets(digest TEXT PRIMARY KEY,app_id TEXT,state TEXT,parent TEXT,
@@ -280,7 +282,11 @@ class PlatformService:
                 active = db.execute("SELECT 1 FROM deployments WHERE project_id=? AND environment=? AND state IN ('dispatching','dispatch_unknown','queued','in_progress')",(project_id,environment)).fetchone()
                 if active:
                     raise PlatformError(409,'Reconcile the in-flight deployment before submitting another')
-                if rollback and not db.execute("SELECT 1 FROM deployments WHERE project_id=? AND release_id=? AND environment='production' AND state='finished'",(project_id,release_id)).fetchone():
+                if rollback and not db.execute("SELECT 1 FROM deployments d JOIN deployment_verifications v ON v.deployment_id=d.id "
+                        "JOIN releases r ON r.id=d.release_id WHERE d.project_id=? AND d.release_id=? "
+                        "AND d.environment='production' AND d.state='finished' "
+                        "AND v.artifact_sha256=r.artifact_sha256 AND v.source_commit=r.source_commit",
+                        (project_id,release_id)).fetchone():
                     raise PlatformError(409,'Rollback requires a previously successful production release')
                 app = db.execute('SELECT * FROM apps WHERE project_id=? AND environment=?',(project_id,environment)).fetchone()
             if not app:
@@ -330,14 +336,37 @@ class PlatformService:
         return self.deployment(actor,project_id,deployment_id)
 
     def deployment(self, actor, project_id, deployment_id):
+        with self.lock:
+            return self._deployment(actor,project_id,deployment_id)
+
+    def _deployment(self, actor, project_id, deployment_id):
         project = self.check(actor,project_id);identifier(deployment_id)
         with self.connection() as db:
-            row = db.execute('SELECT d.*,a.id app_id,a.secret app_secret,a.native_uuid app_uuid,a.environment_uuid,a.url,r.artifact_sha256,r.source_commit,r.dockerfile_sha256 '
+            row = db.execute('SELECT d.*,d.rowid deployment_sequence,a.id app_id,a.secret app_secret,a.native_uuid app_uuid,a.environment_uuid,a.url,r.artifact_sha256,r.source_commit,r.dockerfile_sha256 '
                 'FROM deployments d JOIN apps a ON d.project_id=a.project_id AND d.environment=a.environment JOIN releases r ON d.release_id=r.id '
                 'WHERE d.project_id=? AND d.id=?',(project_id,deployment_id)).fetchone()
         if not row:
             raise PlatformError(404,'Deployment unavailable')
         item = dict(row)
+        with self.connection() as db:
+            proof=db.execute('SELECT verified_at FROM deployment_verifications WHERE deployment_id=? AND artifact_sha256=? AND source_commit=?',
+                (deployment_id,item['artifact_sha256'],item['source_commit'])).fetchone()
+        item['verified_at']=proof['verified_at'] if proof else None
+        item['runtime_verified']=proof is not None
+        item['runtime_active']=False
+
+        def superseded():
+            # Reconcile native jobs too: a newer finished job may never have been
+            # polled through this API. Its running bytes cannot verify this job.
+            with self.connection() as db:
+                newer=db.execute('SELECT native_uuid,state FROM deployments WHERE project_id=? AND environment=? AND rowid>?',
+                    (project_id,row['environment'],row['deployment_sequence'])).fetchall()
+            for entry in newer:
+                if entry['native_uuid']:
+                    status=self.backend.deployment(entry['native_uuid'])
+                    if (status.get('status') or status.get('deployment',{}).get('status'))=='finished':
+                        return True
+            return False
         if not item['native_uuid'] and item['state']=='dispatch_unknown':
             from datetime import datetime
             matches=[]
@@ -358,21 +387,30 @@ class PlatformService:
             if state=='finished':
                 if native.get('commit') and native['commit']!=item['source_commit']:
                     state='provenance_mismatch'
+                elif superseded():
+                    state='finished' if proof else 'superseded_unverified'
                 elif hasattr(self.backend,'runtime_artifact'):
-                    with self.connection() as db:
-                        newer=db.execute("SELECT 1 FROM deployments WHERE project_id=? AND environment=? AND created_at>? AND state='finished' LIMIT 1",
-                            (project_id,row['environment'],row['created_at'])).fetchone()
-                    if newer:
-                        item['runtime_active']=False
+                    actual=self.backend.runtime_artifact(item['url'],item['app_id'],item['app_secret'])
+                    item['runtime_artifact_sha256']=actual
+                    if superseded():
+                        state='finished' if proof else 'superseded_unverified'
                     else:
-                        actual=self.backend.runtime_artifact(item['url'],item['app_id'],item['app_secret'])
-                        item['runtime_artifact_sha256']=actual
                         item['runtime_active']=actual==item['artifact_sha256']
-                        if not item['runtime_active']:state='verifying'
+                        if item['runtime_active']:
+                            with self.connection(True) as db:
+                                db.execute('INSERT OR IGNORE INTO deployment_verifications VALUES(?,?,?,?)',
+                                    (deployment_id,item['artifact_sha256'],item['source_commit'],time.time()))
+                                item['verified_at']=db.execute('SELECT verified_at FROM deployment_verifications WHERE deployment_id=?',
+                                    (deployment_id,)).fetchone()[0]
+                            item['runtime_verified']=True
+                        elif not proof:state='verifying'
+                elif not proof:
+                    state='native_finished_unverified'
             item['state'] = state
             with self.connection(True) as db:
                 db.execute('UPDATE deployments SET state=? WHERE id=?',(state,deployment_id))
         item.pop('request_key',None)
+        item.pop('deployment_sequence',None)
         item.pop('app_secret',None);item.pop('app_id',None)
         item['backend_ref'] = {'provider':'coolify','team_id':self.backend.team_id,'project_uuid':project['native_uuid'],
             'environment_uuid':item.pop('environment_uuid'),'application_uuid':item.pop('app_uuid'),'deployment_uuid':item['native_uuid']}

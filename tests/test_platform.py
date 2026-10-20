@@ -74,6 +74,62 @@ def test_idempotent_native_registration_artifact_commit_deploy_and_provenance(se
     with pytest.raises(PlatformError):s.deploy(b,pa['id'],r['id'],environment='production',request_key='invalid')
     with pytest.raises(PlatformError):s.deployment(a,pa['id'],'native-deployment-2')
     assert d['source_commit']==r['source_commit']
+    assert d['state']=='native_finished_unverified'
+    assert not d['runtime_verified']
+
+
+@pytest.mark.parametrize('verify_first',[False,True])
+def test_historical_verification_is_persistent_and_never_inferred_from_newer_success(setup,tmp_path,verify_first):
+    s,admin,a,b,pa,pb=setup
+    first_release=s.upload(a,pa['id'],artifact(tmp_path,'first'))
+    second_release=s.upload(a,pa['id'],artifact(tmp_path,'second'))
+    current=[first_release['artifact_sha256'] if verify_first else None]
+    s.backend.runtime_artifact=lambda *args:current[0]
+    first=s.deploy(a,pa['id'],first_release['id'],environment='production',request_key='first')
+    assert first['state']==('finished' if verify_first else 'verifying')
+    current[0]=second_release['artifact_sha256']
+    second=s.deploy(a,pa['id'],second_release['id'],environment='production',request_key='second')
+    assert second['state']=='finished' and second['runtime_verified']
+    # A completed native job must supersede the old one even if nobody has
+    # reconciled its metadata state yet, including when the bytes are identical.
+    with s.connection(True) as db:
+        db.execute("UPDATE deployments SET state='queued' WHERE id=?",(second['id'],))
+    old=s.deployment(a,pa['id'],first['id'])
+    assert old['state']==('finished' if verify_first else 'superseded_unverified')
+    assert old['runtime_verified']==verify_first
+    assert old['verified_at']==first['verified_at']
+    assert old['runtime_active'] is False
+    s.deployment(a,pa['id'],second['id'])
+    # Legacy/forged finished state alone cannot authorize rollback.
+    with s.connection(True) as db:
+        db.execute("UPDATE deployments SET state='finished' WHERE id=?",(first['id'],))
+    if verify_first:
+        current[0]=first_release['artifact_sha256']
+        rolled=s.deploy(a,pa['id'],first_release['id'],environment='production',request_key='rollback',rollback=True)
+        assert rolled['runtime_verified'] and rolled['state']=='finished'
+    else:
+        with pytest.raises(PlatformError) as rejected:
+            s.deploy(a,pa['id'],first_release['id'],environment='production',request_key='rollback',rollback=True)
+        assert rejected.value.status==409
+
+
+def test_prior_finished_metadata_is_not_migrated_without_live_proof(setup,tmp_path):
+    s,admin,a,b,pa,pb=setup
+    release=s.upload(a,pa['id'],artifact(tmp_path))
+    s.backend.runtime_artifact=lambda *args:None
+    d=s.deploy(a,pa['id'],release['id'],environment='production',request_key='old')
+    with s.connection(True) as db:
+        db.execute("UPDATE deployments SET state='finished' WHERE id=?",(d['id'],))
+    reopened=PlatformService(s.root,s.backend,control_url=s.control_url)
+    result=reopened.deployment(a,pa['id'],d['id'])
+    assert result['state']=='verifying' and result['verified_at'] is None
+    s.backend.runtime_artifact=lambda *args:release['artifact_sha256']
+    verified=reopened.deployment(a,pa['id'],d['id'])
+    assert verified['runtime_verified']
+    s.backend.runtime_artifact=lambda *args:None
+    later=reopened.deployment(a,pa['id'],d['id'])
+    assert later['state']=='finished' and not later['runtime_active']
+    assert later['verified_at']==verified['verified_at']
 
 
 def test_sso_atomic_app_and_transaction_binding_parent_logout_and_revoke(setup,tmp_path):
@@ -174,6 +230,28 @@ def test_http_sdk_named_profile_and_cookie_csrf(setup,tmp_path,monkeypatch):
         with pytest.raises(HTTPError) as rejected:urlopen(request)
         assert rejected.value.code==403
         assert api.request('/projects/'+pa['id'])['role']=='owner'
+        # Normal HTML form navigation needs an Origin-preserving policy at both
+        # the password page and the cross-origin auto-POST callback page.
+        from urllib.parse import urlencode
+        from chatcoolify.platform_web import LOGIN_COOKIE
+        with urlopen(origin+'/login') as response:
+            assert response.headers['Referrer-Policy']=='strict-origin-when-cross-origin'
+            csrf=response.headers['Set-Cookie'].split(';')[0].split('=',1)[1]
+        for bad_origin in ['null','https://attacker.example.net']:
+            request=Request(origin+'/login',data=b'',headers={'Origin':bad_origin})
+            with pytest.raises(HTTPError) as rejected:urlopen(request)
+            assert rejected.value.code==403
+        s.deploy(a,pa['id'],s.upload(a,pa['id'],artifact(tmp_path,'login'))['id'],
+            environment='preview',request_key='login-preview')
+        with s.connection() as db:app=db.execute('SELECT id FROM apps WHERE project_id=?',(pa['id'],)).fetchone()[0]
+        request=Request(origin+'/login',data=urlencode({'csrf':csrf,'username':'alice@example.net',
+            'password':'Example-alice-password!','application':app,'state':secrets.token_urlsafe(40),'return_path':'/'}).encode(),
+            headers={'Origin':s.control_url,'Cookie':LOGIN_COOKIE+'='+csrf,'Content-Type':'application/x-www-form-urlencoded'})
+        with urlopen(request) as response:
+            page=response.read().decode()
+            assert response.headers['Referrer-Policy']=='strict-origin-when-cross-origin'
+            assert '<meta name="referrer" content="strict-origin-when-cross-origin">' in page
+            assert 'document.forms[0].submit()' in page
     finally:
         server.shutdown();server.server_close();thread.join(timeout=5)
 
