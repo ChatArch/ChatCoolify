@@ -94,6 +94,35 @@ def project_create(ctx,slug,name,visibility,request_key):
     output(client(ctx).create_project(slug,name=name,visibility=visibility,request_key=request_key))
 
 
+@platform.group()
+def domains():
+    """Read addresses or reserve a readable managed hostname for a project."""
+
+
+@domains.command('list')
+@click.argument('project')
+@click.pass_context
+@boundary
+def domains_list(ctx,project):
+    """Show active and desired preview/production URLs and pending changes."""
+    output(client(ctx).domains(project))
+
+
+@domains.command('set')
+@click.argument('project')
+@click.argument('hostname')
+@click.option('--environment',type=click.Choice(['production','preview']),default='production',show_default=True)
+@click.pass_context
+@boundary
+def domains_set(ctx,project,hostname,environment):
+    """Owner: reserve HOSTNAME; explicit preview/publish activates it after verification.
+
+    HOSTNAME is a full hostname within the operator-managed domain suffix,
+    without scheme, path or port. This does not publish or change a live URL.
+    """
+    output(client(ctx).set_domain(project,hostname,environment=environment))
+
+
 @platform.command()
 @click.argument('project')
 @click.argument('directory',type=click.Path(exists=True,file_okay=False))

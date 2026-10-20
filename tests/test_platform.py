@@ -16,7 +16,7 @@ class NativeFixture:
     def create_project(self,name,marker):return {'uuid':'native-project','environments':[{'name':'production','uuid':'prod-env'},{'name':'preview','uuid':'dev-env'}]}
     def get_project(self,uuid):return self.create_project('','')
     def environments(self,project):return {e['name']:e for e in project['environments']}
-    def create_source_application(self,*args):self.sequence+=1;return {'uuid':'native-app-'+str(self.sequence),'domains':'https://app'+str(self.sequence)+'.example.net'}
+    def create_source_application(self,*args,**kwargs):self.sequence+=1;return {'uuid':'native-app-'+str(self.sequence),'domains':kwargs.get('domains') or 'https://app'+str(self.sequence)+'.example.net'}
     def update_application(self,*args,**kwargs):self.calls.append(('update',args,kwargs))
     def native_domains(self,url):return url
     def env(self,*args):self.calls.append(('env',args))
@@ -234,6 +234,15 @@ def test_http_sdk_named_profile_and_cookie_csrf(setup,tmp_path,monkeypatch):
     try:
         api=PlatformClient(origin);login=api.login('alice@example.net','Example-alice-password!')
         assert [p['id'] for p in api.request('/projects')]==[pa['id']]
+        addresses=api.domains(pa['id'])
+        assert addresses['domain_suffix']=='example.net'
+        updated=api.set_domain(pa['id'],'alice-custom.example.net',environment='preview')
+        preview=next(x for x in updated['environments'] if x['environment']=='preview')
+        assert preview['desired_url']=='https://alice-custom.example.net'
+        assert preview['current_url'] is None and preview['pending']
+        with pytest.raises(PlatformError) as other_domain:
+            api.set_domain(pb['id'],'stolen-name.example.net')
+        assert other_domain.value.status==404
         with pytest.raises(PlatformError) as error:api.request('/projects/'+pb['id'])
         assert error.value.status==404
         home=tmp_path.resolve()/'client-home';api.save('alice',home=home)
@@ -291,3 +300,57 @@ def test_corrupt_deflate_and_file_directory_conflicts_are_client_errors():
         archive.writestr('assets/a.js','nested conflict')
     with pytest.raises(PlatformError) as error:validate_archive(stream.getvalue())
     assert error.value.status==422
+
+
+def test_account_console_is_private_scoped_escaped_and_logout_revokes_session(setup):
+    import json
+    import threading
+    from http.server import ThreadingHTTPServer
+    from urllib.request import Request, urlopen, build_opener, HTTPRedirectHandler
+    from urllib.error import HTTPError
+    from chatcoolify.platform_web import PlatformHandler, COOKIE
+
+    s, admin, a, b, pa, pb = setup
+    s.create_project(a, 'private-console', name='<script>private-only</script>', request_key='console-xss')
+    login = s.login(s.live(a).username, 'Example-alice-password!')
+    session = s.control_session(login['token'])
+    server = ThreadingHTTPServer(('127.0.0.1', 0), PlatformHandler)
+    server.platform = s
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    origin = 'http://127.0.0.1:' + str(server.server_port)
+    headers = {'Cookie': COOKIE + '=' + login['token']}
+
+    class NoRedirect(HTTPRedirectHandler):
+        def redirect_request(self, *args):
+            return None
+
+    try:
+        opener = build_opener(NoRedirect())
+        with pytest.raises(HTTPError) as anonymous:
+            opener.open(origin + '/')
+        assert anonymous.value.code == 303
+        assert anonymous.value.headers['Location'] == '/login'
+        with urlopen(Request(origin + '/', headers=headers)) as response:
+            page = response.read().decode()
+        assert '我的网站' in page
+        assert pa['slug'] in page and pb['slug'] not in page
+        assert '&lt;script&gt;private-only&lt;/script&gt;' in page
+        assert '<script>private-only</script>' not in page
+        assert 'viewport' in page and 'domains set' in page
+        # The console logout button uses the same CSRF-protected cookie API.
+        with pytest.raises(HTTPError) as rejected:
+            urlopen(Request(origin + '/api/platform/v1/logout', data=b'', headers=headers))
+        assert rejected.value.code == 403
+        assert s.control_session(login['token']).principal.user_id == a.user_id
+        with urlopen(Request(origin + '/api/platform/v1/logout', data=b'', headers={
+            **headers, 'Origin': s.control_url, 'X-CSRF-Token': session.csrf_token,
+        })) as response:
+            assert json.loads(response.read()) == {'authenticated': False}
+        with pytest.raises(PlatformError) as revoked:
+            s.control_session(login['token'])
+        assert revoked.value.status == 401
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)

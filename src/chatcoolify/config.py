@@ -66,6 +66,8 @@ class PlatformServerConfig(BaseEnvConfig):
     COOLIFY_API_TOKEN = EnvField('COOLIFY_API_TOKEN',is_sensitive=True,desc='Server-only native Team service token')
     CHATCOOLIFY_PLATFORM_DATA = EnvField('CHATCOOLIFY_PLATFORM_DATA',default='/data',desc='Persistent platform root')
     CHATCOOLIFY_CONTROL_URL = EnvField('CHATCOOLIFY_CONTROL_URL',desc='Public platform HTTPS origin')
+    CHATCOOLIFY_DOMAIN_SUFFIX = EnvField('CHATCOOLIFY_DOMAIN_SUFFIX',desc='Operator-managed wildcard DNS suffix; defaults to the parent of platform.<suffix>')
+    CHATCOOLIFY_RESERVED_HOSTS = EnvField('CHATCOOLIFY_RESERVED_HOSTS',desc='Comma-separated additional operator-reserved public hostnames outside native Team inventory')
     CHATCOOLIFY_INTERNAL_URL = EnvField('CHATCOOLIFY_INTERNAL_URL',desc='Private platform origin for frontend authorization')
     CHATCOOLIFY_SERVER_UUID = EnvField('CHATCOOLIFY_SERVER_UUID',desc='Operator-approved native server')
     CHATCOOLIFY_TEAM_ID = EnvField('CHATCOOLIFY_TEAM_ID',desc='Native service Team ID')

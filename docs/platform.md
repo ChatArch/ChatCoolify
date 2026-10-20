@@ -2,6 +2,8 @@
 
 `coolify platform` 为邀请制可信协作者提供前端项目登记、目录直传、预览、显式正式发布及回退。独立后端继续由 Coolify 原生 Application/Service 管理，可登记成项目服务关联。普通账号只获得平台会话；服务端持有原生 Team token，项目授权每次检查。
 
+浏览器打开平台公共 origin 并登录，可查看自己的项目、正式网站与预览链接、项目权限以及待生效的域名设置。这里只显示当前账号拥有或获授权的项目。原生 Coolify 管理员控制台是独立入口；平台账号不会自动获得原生服务器或 Team 管理权限。
+
 ```bash
 coolify platform --profile work login --url https://<platform-origin> --username <account>
 coolify platform --profile work projects create my-site --visibility private
@@ -14,6 +16,25 @@ coolify platform --profile work rollback PROJECT_ID PREVIOUS_PRODUCTION_RELEASE_
 ```
 
 登录交互隐藏密码；自动化使用 `--password-env KEY` 指定环境变量名，密码不进入参数。endpoint 使用 ChatEnv 的 `coolify-platform` 具名配置，opaque session 使用 TokenStore；选 profile 不切换其他 active 配置。目录上传排除隐藏文件（包括 `.env`/`.git`），拒绝软链接、凭据文件、越界路径和 runtime 保留路径；最多 2,000 文件、8 MiB ZIP、32 MiB 解包内容。只支持已经构建完成并含 `index.html` 的前端产物，不能通过上传自定义 Dockerfile 执行任意宿主命令。
+
+## 可读域名与自定义前缀
+
+宿主使用 `CHATCOOLIFY_DOMAIN_SUFFIX` 指定已具备 wildcard DNS／HTTPS 的受管后缀。未配置时，`platform.<suffix>` 控制地址可推导后缀；其他控制地址应显式配置。新项目默认取得 `<slug>.<suffix>` 正式入口和 `<slug>-preview.<suffix>` 预览入口，长原生 UUID 仅作为资源引用。生产、预览、平台保留名和历史入口在同一命名空间检查占用，不能抢占其他项目或控制面地址。
+
+平台全局 claim 覆盖所有平台项目；原生清单覆盖服务账号所在 Team 的普通／Compose 应用及 service 子应用。原生 API 不提供跨 Team 的全局发现，其他 Team 或共享路由由运维通过 `CHATCOOLIFY_RESERVED_HOSTS` 追加保留完整 hostname，多个名称以逗号分隔；不使用 force override 覆盖占用。
+
+```bash
+coolify platform --profile work domains list PROJECT_ID
+# owner 可指定受管后缀内的一层完整 hostname；不带 https:// 或路径。
+coolify platform --profile work domains set PROJECT_ID notes.apps.example.net
+coolify platform --profile work domains set PROJECT_ID notes-preview.apps.example.net --environment preview
+```
+
+设置只预留目标域名，不会立即发布或改变正在服务的生产入口。重新上传前端目录以生成包含当前 runtime 的 release，预览后明确 publish；原生部署和运行摘要验证成功才切换主入口。旧入口的 GET／HEAD 跳转到新主入口，仍由同一私有登录机制保护；旧域名不会因此释放给其他用户。失败部署保持旧主入口。
+
+`domains list` 同时返回 `desired_url`、`current_url` 和 `pending`，不要把预留成功说成已上线。域名切换不会修改独立后端的数据；ChatComment 等后端若检查 Origin，运维需先增量授权新来源并保留旧设置。这里提供的是平台受管子域名自定义，不等同于已验证外部自带域名。后者还需要 DNS 所有权、证书与跨站登录协议；当前 private reader 的同站点约束保持。
+
+Python 使用相同接口：`client.domains(project_id)` 查询，`client.set_domain(project_id, "notes.apps.example.net", environment="production")` 预留；发布仍调用现有 `deploy`。
 
 ## 执行与来源
 

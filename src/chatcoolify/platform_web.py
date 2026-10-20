@@ -91,8 +91,10 @@ class PlatformHandler(BaseHTTPRequestHandler):
     def internal(self,path):
         if self.command!='POST':raise PlatformError(405,'POST required')
         value=self.json()
-        app=self.service.application_auth(value.get('application_id',''),self.headers.get('Authorization','').removeprefix('Bearer '),value.get('host'))
-        if path=='authorize':result=self.service.authorize(app,value)
+        app=self.service.application_auth(value.get('application_id',''),self.headers.get('Authorization','').removeprefix('Bearer '),
+            None if path=='canonical' else value.get('host'))
+        if path=='canonical':result=self.service.canonical_origin(app,value.get('host'))
+        elif path=='authorize':result=self.service.authorize(app,value)
         elif path=='exchange':result=self.service.exchange(app,value.get('code'),value.get('state'))
         elif path=='reauth':result=self.service.reauth(app,value)
         elif path=='service':result=self.service.service_request(app,value)
@@ -139,14 +141,58 @@ class PlatformHandler(BaseHTTPRequestHandler):
     def console(self):
         try:session=self.session()
         except PlatformError:return self.respond(303,b'',headers={'Location':'/login'})
-        projects=self.service.projects(session.principal)
-        rows=''.join(f'<tr><td>{html.escape(p["name"])}</td><td>{p["visibility"]}</td><td>{p["role"]}</td>'
-            f'<td><code>{p["id"]}</code></td><td>'+ ' '.join(f'<a href="{html.escape(a["url"],quote=True)}">{a["environment"]}</a>' for a in p['applications'])+'</td></tr>' for p in projects)
-        page=f'''<!doctype html><html lang="zh"><meta name="viewport" content="width=device-width, initial-scale=1"><title>项目平台</title>
-        <style>body{{font:16px system-ui;margin:4vw}}table{{border-collapse:collapse;width:100%}}td,th{{text-align:left;padding:14px;border-bottom:1px solid #ddd}}code{{font-size:12px}}</style>
-        <h1>项目</h1><p>{html.escape(self.service.live(session.principal).display_name or self.service.live(session.principal).username)}</p>
-        <table><tr><th>项目</th><th>访问</th><th>权限</th><th>ID</th><th>应用</th></tr>{rows}</table>
-        <p>用 <code>coolify platform</code> 注册、上传、预览、发布、查看日志及回退。</p></html>'''.encode()
+        actor=session.principal
+        account=self.service.live(actor)
+        projects=self.service.projects(actor)
+        cards=[]
+        role_names={'owner':'所有者','deployer':'可部署','viewer':'可阅读'}
+        for project in projects:
+            addresses=self.service.domains(actor,project['id'])
+            applications={a['environment']:a for a in project['applications']}
+            links=[]
+            for domain in addresses['environments']:
+                environment=domain['environment']
+                label='正式网站' if environment=='production' else '预览环境'
+                application=applications.get(environment)
+                current=domain.get('current_url')
+                if current:
+                    url=html.escape(current,quote=True)
+                    value=f'<a href="{url}">{url}</a>'
+                else:value='<span class="muted">尚未部署</span>'
+                desired=domain.get('desired_url')
+                pending=(f'<small>下次发布生效：{html.escape(desired)}</small>'
+                         if domain.get('pending') and desired else '')
+                links.append(f'<div class="address"><span>{label}</span><div>{value}{pending}</div></div>')
+            visibility='私人' if project['visibility']=='private' else '公开'
+            role=role_names.get(project['role'],project['role'])
+            cards.append(f'<article><div class="card-title"><h2>{html.escape(project["name"])}</h2>'
+                f'<span class="badge">{visibility} · {html.escape(role)}</span></div>'
+                f'<p class="slug">{html.escape(project["slug"])}</p>'+''.join(links)+
+                f'<details><summary>项目 ID 与命令</summary><code>{html.escape(project["id"])}</code>'
+                f'<pre>coolify platform status {html.escape(project["id"])}\n'
+                f'coolify platform domains list {html.escape(project["id"])}</pre></details></article>')
+        name=html.escape(account.display_name or account.username)
+        empty='<p class="empty">你的账号下还没有项目。通过 CLI 注册后，网站会出现在这里。</p>'
+        csrf=json.dumps(session.csrf_token).replace('<','\\u003c')
+        page=f'''<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>我的网站 · ChatCoolify</title><style>
+        *{{box-sizing:border-box}}body{{margin:0;background:#f5f6f3;color:#202b24;font:16px/1.6 system-ui,sans-serif}}
+        header,main{{max-width:1080px;margin:auto;padding:24px}}header{{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid #dce2d8}}
+        header a{{color:inherit;text-decoration:none;font-weight:700}}.account{{display:flex;align-items:center;gap:14px;min-width:0;font-size:14px}}.account span{{overflow-wrap:anywhere}}
+        button{{background:white;border:1px solid #b9c7b5;padding:7px 14px;border-radius:7px;color:inherit;cursor:pointer;white-space:nowrap}}
+        h1{{font-size:32px;margin:20px 0 6px}}h2{{margin:0;font-size:21px;overflow-wrap:anywhere}}.intro,.muted,.slug{{color:#64705e}}.intro{{margin:0 0 28px}}
+        .cards{{display:grid;gap:18px}}article{{background:white;border:1px solid #dce2d8;border-radius:12px;padding:24px;min-width:0}}
+        .card-title{{display:flex;align-items:start;justify-content:space-between;gap:16px}}.badge{{background:#eef2e9;border-radius:6px;padding:3px 9px;white-space:nowrap;font-size:13px}}
+        .slug{{margin:6px 0 18px;font-size:14px}}.address{{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px;margin:14px 0}}.address a{{color:#355d36;overflow-wrap:anywhere}}small{{display:block;color:#7a631e;overflow-wrap:anywhere}}
+        details{{margin-top:20px;border-top:1px solid #e6ebe2;padding-top:14px;font-size:13px}}summary{{cursor:pointer;color:#64705e}}code,pre{{overflow-wrap:anywhere;white-space:pre-wrap;font-size:12px}}
+        aside{{margin-top:28px;padding:20px;background:#edf1e8;border-radius:10px;font-size:14px}}aside p{{margin:6px 0}}.empty{{padding:24px;background:white;border-radius:12px}}
+        @media(max-width:540px){{header,main{{padding:18px}}.card-title{{display:block}}.badge{{display:inline-block;margin-top:8px}}article{{padding:18px}}.address{{grid-template-columns:1fr;gap:2px}}header{{align-items:start}}.account{{flex-wrap:wrap;justify-content:end}}}}
+        </style><header><a href="/">ChatCoolify</a><div class="account"><span>{name}</span><button id="logout">退出</button></div></header>
+        <main><h1>我的网站</h1><p class="intro">{len(projects)} 个项目 · 仅显示你拥有或获授权的项目。</p>
+        <section class="cards">{''.join(cards) or empty}</section><aside><strong>从本地接入新网站</strong>
+        <p>使用 <code>coolify platform projects create</code> 注册，上传构建目录后先预览，再明确发布。发布、日志、回退和协作授权使用同一套 CLI／API。</p>
+        <p>域名设置：<code>coolify platform domains set PROJECT_ID HOSTNAME</code>。设置只预留名称，下次通过验证的部署才切换入口。</p></aside></main>
+        <script>document.getElementById('logout').onclick=async function(){{this.disabled=true;try{{const r=await fetch('/api/platform/v1/logout',{{method:'POST',headers:{{'X-CSRF-Token':{csrf}}}}});if(!r.ok)throw new Error();location.href='/login'}}catch(e){{this.disabled=false;this.textContent='退出失败，请重试'}}}};</script></html>'''.encode()
         self.respond(200,page,'text/html; charset=utf-8')
 
     def dispatch(self):
@@ -182,7 +228,11 @@ class PlatformHandler(BaseHTTPRequestHandler):
         project_id=route[1]
         if len(route)==2 and self.command=='GET':return self.respond(200,self.service.project(actor,project_id))
         self.service.check(actor,project_id)
-        if len(route)==4 and route[2]=='grants' and self.command in {'PUT','DELETE'}:
+        if len(route)==3 and route[2]=='domains' and self.command=='GET':
+            result=self.service.domains(actor,project_id)
+        elif len(route)==4 and route[2]=='domains' and self.command=='PUT':
+            result=self.service.set_domain(actor,project_id,self.json().get('hostname'),environment=route[3])
+        elif len(route)==4 and route[2]=='grants' and self.command in {'PUT','DELETE'}:
             role='none' if self.command=='DELETE' else self.json().get('role')
             result=self.service.grant(actor,project_id,route[3],role)
         elif len(route)==3 and route[2]=='releases':

@@ -45,6 +45,34 @@ def test_version_and_registered_tree_are_available() -> None:
     assert "bootstrap-owner" in brief.output
 
 
+def test_platform_domains_cli_uses_profile_and_explicit_environment(monkeypatch) -> None:
+    class DomainClient:
+        def domains(self, project):
+            return {"project": project, "environments": []}
+
+        def set_domain(self, project, hostname, *, environment):
+            return {"project": project, "hostname": hostname, "environment": environment,
+                    "pending": True}
+
+    profiles = []
+
+    def profile_client(cls, profile="default", **kwargs):
+        profiles.append(profile)
+        return DomainClient()
+
+    monkeypatch.setattr("chatcoolify.platform_cli.PlatformClient.from_profile", classmethod(profile_client))
+    runner = CliRunner()
+    listed = runner.invoke(main, ["platform", "--profile", "work", "domains", "list", "project-1"])
+    assert listed.exit_code == 0, listed.output
+    assert json.loads(listed.output)["project"] == "project-1"
+    changed = runner.invoke(main, ["platform", "--profile", "work", "domains", "set",
+                                  "project-1", "notes-preview.apps.example.net", "--environment", "preview"])
+    assert changed.exit_code == 0, changed.output
+    assert json.loads(changed.output) == {"project": "project-1", "hostname": "notes-preview.apps.example.net",
+                                          "environment": "preview", "pending": True}
+    assert profiles == ["work", "work"]
+
+
 def test_project_create_requires_explicit_write_flag() -> None:
     result = CliRunner().invoke(main, ["project-create", "demo"])
     assert result.exit_code != 0

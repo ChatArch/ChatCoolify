@@ -2,6 +2,8 @@
 
 `coolify platform` supports invited trusted collaborators: register a frontend project, upload a built local directory, inspect a preview, explicitly publish, view native logs and roll back. Independent backends remain native Coolify applications/services and can be associated with a project. The existing `CoolifyClient` and Git/backend API remain available.
 
+Open the platform origin in a browser and sign in to see projects you own or have been granted access to, including production/preview links, your role and pending domain settings. The native Coolify administrator console is a separate surface; a platform account does not automatically receive native server or Team administration privileges.
+
 ```bash
 coolify platform --profile work login --url https://<platform-origin> --username <account>
 coolify platform --profile work projects create my-site --visibility private
@@ -14,6 +16,22 @@ coolify platform --profile work rollback PROJECT_ID PREVIOUS_PRODUCTION_RELEASE_
 ```
 
 Passwords are entered through a hidden prompt or an environment variable named by `--password-env`. ChatEnv owns named endpoint profiles; TokenStore owns opaque sessions. Named profile selection does not change another active profile. Uploads exclude hidden files such as `.env` and `.git`, reject symlinks, credentials and reserved/traversal paths, and require `index.html`. Limits: 2,000 files, 8 MiB ZIP and 32 MiB expanded content. Arbitrary user Dockerfiles are not accepted.
+
+## Readable managed domains
+
+The operator configures `CHATCOOLIFY_DOMAIN_SUFFIX` with a suffix already served by wildcard DNS and HTTPS. A control origin named `platform.<suffix>` can supply the suffix when no explicit value is configured. New projects reserve `<slug>.<suffix>` for production and `<slug>-preview.<suffix>` for preview. Reserved infrastructure labels, existing native domains, production/preview names and historical addresses share conflict checks; long native UUIDs remain resource references.
+
+Global platform claims cover every platform project. Native discovery covers plain/Compose applications and service child applications within the service account's Team; it is not cross-Team global discovery. Operators reserve other Teams' or shared routes through comma-separated full hostnames in `CHATCOOLIFY_RESERVED_HOSTS`. Domain conflicts are never force-overridden.
+
+```bash
+coolify platform --profile work domains list PROJECT_ID
+coolify platform --profile work domains set PROJECT_ID notes.apps.example.net
+coolify platform --profile work domains set PROJECT_ID notes-preview.apps.example.net --environment preview
+```
+
+Only the project owner can reserve another hostname. It must be one label under the managed suffix, without scheme, path or port. A setting does not publish or change the live URL. Upload the built directory again to package the current runtime, preview it and explicitly publish; activation follows native deployment success and signed runtime digest verification. Previous GET/HEAD addresses redirect to the canonical address and stay reserved. A failed deployment keeps the old canonical address.
+
+`domains list` exposes `desired_url`, `current_url` and `pending`. The SDK uses the same contract through `client.domains(project_id)` and `client.set_domain(project_id, "notes.apps.example.net", environment="production")`. Domain activation does not migrate backend data. Backends that validate Origin, such as ChatComment, need an additive authorization of the new origin while preserving existing data/settings. External bring-your-own domains still require ownership, certificate and cross-site identity work; managed-prefix customization does not claim that capability.
 
 ## Native execution and provenance
 

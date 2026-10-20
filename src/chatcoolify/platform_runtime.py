@@ -130,7 +130,27 @@ class FrontendHandler(BaseHTTPRequestHandler):
                 expected=hmac.new(os.environ['PLATFORM_APPLICATION_KEY'].encode(),
                     ('artifact|'+proof[0]+'|'+os.environ['PLATFORM_APPLICATION_ID']).encode(),hashlib.sha256).hexdigest()
                 if not hmac.compare_digest(expected,proof[1]):return self.respond(403,{'error':'Invalid probe'})
-                return self.respond(200,{'artifact_sha256':os.environ['PLATFORM_ARTIFACT_SHA256']})
+                return self.respond(200,{'artifact_sha256':os.environ['PLATFORM_ARTIFACT_SHA256'],
+                    'runtime_sha256':hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                    'domain_generation':os.environ.get('PLATFORM_DOMAIN_GENERATION','0'),
+                    'public_urls':[u for u in os.environ.get('PLATFORM_PUBLIC_URLS','').split(',') if u]})
+            # The broker commits the canonical URL only after the new native
+            # container is healthy and its exact runtime/configuration is proven.
+            # Until then this new image continues serving the old private origin.
+            status,canonical=self.broker('canonical',{'host':self.headers.get('Host','')})
+            if status!=200:return self.respond(status,canonical)
+            primary=canonical.get('url','')
+            if primary not in os.environ.get('PLATFORM_PUBLIC_URLS','').split(','):
+                return self.respond(503,{'error':'Application domain configuration is pending'})
+            if self.headers.get('Host')!=urlsplit(primary).netloc:
+                if self.command in {'GET','HEAD'}:
+                    # Construct from a registered origin and this request's
+                    # relative path, never a caller-controlled Host or absolute URL.
+                    parsed_path=urlsplit(self.path)
+                    target=primary.rstrip('/')+(parsed_path.path or '/')
+                    if parsed_path.query:target+='?'+parsed_path.query
+                    return self.respond(308,b'',headers={'Location':target})
+                return self.respond(421,{'error':'Use the canonical application origin'})
             if path == '/__platform/callback' and self.command == 'POST':
                 if self.headers.get('Origin') != os.environ['PLATFORM_CONTROL_URL'].rstrip('/'):
                     return self.respond(403, {'error': 'Invalid login origin'})

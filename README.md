@@ -56,6 +56,8 @@ coolify website-plan \
 
 省略 `--domain` 时，计划会请求 Coolify 从已配置的泛域名池自动分配唯一 tenant URL；需要自定义域名时才显式传入 `--domain`。查看完整的 [真实 Git 到 HTTPS 演示](https://arch.gh.wzhecnu.cn/ChatCoolify/self-service-demo/)。
 
+以上为直接原生 API 的低层命令。面向普通协作者的 `coolify platform` 使用项目名分配可读的正式／预览子域名，owner 可通过 `domains set` 自定义受管前缀；登录、项目列表、目录上传与明确发布流程见[本地项目平台](https://arch.gh.wzhecnu.cn/ChatCoolify/platform/)。
+
 该命令只输出官方 API payload。真正创建资源需要同时具备 `write` Token 和显式写门：
 
 ```bash

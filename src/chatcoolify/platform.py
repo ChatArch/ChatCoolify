@@ -38,9 +38,21 @@ def safe_return(value):
     return value
 
 
+DOMAIN_LABEL=re.compile(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?')
+RESERVED_DOMAIN_LABELS=frozenset({'platform','control','coolify','admin','api','auth','login','logout',
+    'account','accounts','www','mail','smtp','ftp','ssh','ns1','ns2','status','metrics','internal'})
+
+
+def domain_hostname(value):
+    if (not isinstance(value,str) or value!=value.strip() or not value.isascii()
+            or len(value)>253 or not value or any(not DOMAIN_LABEL.fullmatch(p) for p in value.lower().split('.'))):
+        raise PlatformError(422,'Invalid domain hostname')
+    return value.lower()
+
+
 class PlatformService:
     """Importable service; HTTP/CLI adapters do not own lifecycle decisions."""
-    def __init__(self, root, backend, *, control_url, internal_url=None):
+    def __init__(self, root, backend, *, control_url, internal_url=None, domain_suffix=None, reserved_hostnames=()):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.root.chmod(0o700)
@@ -50,6 +62,15 @@ class PlatformService:
         self.backend = backend
         self.control_url = control_url.rstrip('/')
         self.internal_url = (internal_url or control_url).rstrip('/')
+        control_host=urlsplit(self.control_url).hostname or ''
+        if not domain_suffix:
+            if not control_host.startswith('platform.'):
+                raise PlatformError(422,'Configure the operator-managed domain suffix')
+            domain_suffix=control_host[len('platform.'):]
+        self.domain_suffix=domain_hostname(domain_suffix)
+        if '.' not in self.domain_suffix:raise PlatformError(422,'Managed domain suffix requires a DNS domain')
+        self.reserved_hostnames={domain_hostname(h) for h in reserved_hostnames if h}
+        self.reserved_hostnames.add(domain_hostname(control_host))
         self.lock = threading.RLock()
         with self.connection() as db:
             db.executescript('''
@@ -77,7 +98,16 @@ class PlatformService:
                 upstream TEXT,adapter TEXT,secret TEXT,deployment_uuid TEXT,state TEXT,PRIMARY KEY(project_id,id));
               CREATE TABLE IF NOT EXISTS audit(id INTEGER PRIMARY KEY,project_id TEXT,subject TEXT,
                 action TEXT,resource_id TEXT,created_at REAL);
+              CREATE TABLE IF NOT EXISTS domain_claims(hostname TEXT PRIMARY KEY,project_id TEXT NOT NULL,
+                environment TEXT NOT NULL,created_at REAL NOT NULL);
+              CREATE TABLE IF NOT EXISTS domain_plans(project_id TEXT,environment TEXT,desired_url TEXT NOT NULL,
+                current_url TEXT,generation INTEGER NOT NULL DEFAULT 0,PRIMARY KEY(project_id,environment));
+              CREATE TABLE IF NOT EXISTS domain_routes(project_id TEXT,environment TEXT,url TEXT,
+                PRIMARY KEY(project_id,environment,url));
+              CREATE TABLE IF NOT EXISTS domain_deployments(deployment_id TEXT PRIMARY KEY,desired_url TEXT NOT NULL,
+                generation INTEGER NOT NULL,urls TEXT NOT NULL);
             ''')
+        self._migrate_domains()
         self.database.chmod(0o600)
 
     @contextmanager
@@ -94,6 +124,119 @@ class PlatformService:
             raise
         finally:
             db.close()
+
+    def _managed_hostname(self,value):
+        host=domain_hostname(value)
+        if '.' not in host:host=host+'.'+self.domain_suffix
+        suffix='.'+self.domain_suffix
+        if not host.endswith(suffix) or '.' in host[:-len(suffix)]:
+            raise PlatformError(422,'Only a single subdomain of the managed platform domain is supported')
+        label=host[:-len(suffix)]
+        if label in RESERVED_DOMAIN_LABELS or host in self.reserved_hostnames:
+            raise PlatformError(409,'Domain hostname is reserved')
+        return host
+
+    def _inventory(self):
+        # Test adapters can omit discovery; the native production adapter cannot.
+        discover=getattr(self.backend,'domain_inventory',None)
+        return discover() if discover else {}
+
+    def _claim_domain(self,db,project_id,environment,url,*,inventory=None,native_uuid=None):
+        host=urlsplit(url).hostname
+        prior=db.execute('SELECT project_id,environment FROM domain_claims WHERE hostname=?',(host,)).fetchone()
+        if prior and (prior['project_id']!=project_id or prior['environment']!=environment):
+            raise PlatformError(409,'Domain hostname is unavailable')
+        if inventory is not None:
+            occupied=set(inventory.get(host,()))
+            if occupied-({native_uuid} if native_uuid else set()):
+                raise PlatformError(409,'Domain hostname is already used by a native application')
+        db.execute('INSERT OR IGNORE INTO domain_claims VALUES(?,?,?,?)',
+            (host,project_id,environment,time.time()))
+
+    def _default_urls(self,slug):
+        return {'production':'https://'+self._managed_hostname(slug),
+            'preview':'https://'+self._managed_hostname(slug+'-preview')}
+
+    def _migrate_domains(self):
+        """Backfill metadata only; do not change a native route or active app."""
+        with self.connection(True) as db:
+            projects=db.execute('SELECT id,slug FROM projects ORDER BY created_at').fetchall()
+            # Current routes win before proposing readable defaults for old projects.
+            for app in db.execute('SELECT project_id,environment,url FROM apps').fetchall():
+                self._claim_domain(db,app['project_id'],app['environment'],app['url'])
+                db.execute('INSERT OR IGNORE INTO domain_routes VALUES(?,?,?)',
+                    (app['project_id'],app['environment'],app['url']))
+            for project in projects:
+                for environment in ['production','preview']:
+                    if db.execute('SELECT 1 FROM domain_plans WHERE project_id=? AND environment=?',
+                            (project['id'],environment)).fetchone():continue
+                    slug=project['slug'].rstrip('-')
+                    name=slug if environment=='production' else slug+'-preview'
+                    try:
+                        url='https://'+self._managed_hostname(name)
+                        self._claim_domain(db,project['id'],environment,url)
+                    except PlatformError:
+                        # Legacy slugs may end in '-' or collide with another
+                        # project's old native/default route. Retain a readable base.
+                        base=(slug[:47] or 'project')+'-'+project['id'][:6]
+                        name=base if environment=='production' else base+'-preview'
+                        url='https://'+self._managed_hostname(name)
+                        self._claim_domain(db,project['id'],environment,url)
+                    app=db.execute('SELECT url FROM apps WHERE project_id=? AND environment=?',
+                        (project['id'],environment)).fetchone()
+                    db.execute('INSERT INTO domain_plans VALUES(?,?,?,?,0)',
+                        (project['id'],environment,url,app['url'] if app else None))
+
+    def _domain_change_inflight(self,db,project_id,environment):
+        return db.execute("SELECT 1 FROM deployments d LEFT JOIN domain_deployments c ON c.deployment_id=d.id "
+            "LEFT JOIN domain_plans p ON p.project_id=d.project_id AND p.environment=d.environment "
+            "WHERE d.project_id=? AND d.environment=? AND (d.state IN ('dispatching','dispatch_unknown','queued','in_progress') "
+            "OR ((c.generation>0 OR p.current_url IS NOT NULL) AND p.current_url IS NOT c.desired_url "
+            "AND d.state IN ('verifying','verifying_domain','native_finished_unverified'))) LIMIT 1",
+            (project_id,environment)).fetchone() is not None
+
+    def domains(self,actor,project_id):
+        self.check(actor,project_id)
+        with self.connection() as db:
+            result=[]
+            for row in db.execute('SELECT * FROM domain_plans WHERE project_id=? ORDER BY environment',(project_id,)):
+                routes=[r[0] for r in db.execute('SELECT url FROM domain_routes WHERE project_id=? AND environment=? ORDER BY url',
+                    (project_id,row['environment'])) if r[0]!=row['current_url']]
+                result.append({'environment':row['environment'],'desired_url':row['desired_url'],
+                    'current_url':row['current_url'],'legacy_urls':routes,
+                    'pending':row['desired_url']!=row['current_url'],'generation':row['generation']})
+        return {'project_id':project_id,'domain_suffix':self.domain_suffix,'environments':result}
+
+    def set_domain(self,actor,project_id,hostname,*,environment='production'):
+        self.check(actor,project_id,'manage_domains')
+        if environment not in {'production','preview'}:raise PlatformError(422,'Invalid deployment environment')
+        url='https://'+self._managed_hostname(hostname)
+        with self.lock:
+            inventory=self._inventory()
+            with self.connection(True) as db:
+                plan=db.execute('SELECT * FROM domain_plans WHERE project_id=? AND environment=?',
+                    (project_id,environment)).fetchone()
+                if plan['desired_url']==url:return self.domains(actor,project_id)
+                if self._domain_change_inflight(db,project_id,environment):
+                    raise PlatformError(409,'Reconcile the in-flight deployment before changing its domain')
+                app=db.execute('SELECT native_uuid FROM apps WHERE project_id=? AND environment=?',
+                    (project_id,environment)).fetchone()
+                self._claim_domain(db,project_id,environment,url,inventory=inventory,
+                    native_uuid=app['native_uuid'] if app else None)
+                db.execute('UPDATE domain_plans SET desired_url=?,generation=generation+1 WHERE project_id=? AND environment=?',
+                    (url,project_id,environment))
+                self.audit(db,actor,project_id,'domain:stage',url)
+        return self.domains(actor,project_id)
+
+    def canonical_origin(self,app,host):
+        """An app-only lookup, so a new container can preserve the old origin
+        until its native artifact is verified and the domain is committed."""
+        if not isinstance(host,str):raise PlatformError(403,'Application host mismatch')
+        with self.connection() as db:
+            claim=db.execute('SELECT 1 FROM domain_claims WHERE hostname=? AND project_id=? AND environment=?',
+                (host,app['project_id'],app['environment'])).fetchone()
+        if not claim:raise PlatformError(403,'Application host mismatch')
+        return {'url':app['url']}
 
     def live(self, actor):
         try:
@@ -172,7 +315,7 @@ class PlatformService:
         role = 'owner' if row['owner_id'] == actor.user_id else grant['role']
         if operation in {'deploy', 'publish', 'rollback'} and role not in {'owner', 'deployer'}:
             raise PlatformError(403, 'Deployment permission required')
-        if operation in {'grant', 'manage_services'} and role != 'owner':
+        if operation in {'grant', 'manage_services','manage_domains'} and role != 'owner':
             raise PlatformError(403, 'Project owner permission required')
         return {**dict(row), 'role': role}
 
@@ -182,13 +325,14 @@ class PlatformService:
 
     def create_project(self, actor, slug, *, name=None, visibility='private', request_key):
         self.live(actor)
-        if not re.fullmatch(r'[a-z][a-z0-9-]{2,48}', slug or '') or visibility not in {'public','private'}:
+        if not re.fullmatch(r'[a-z][a-z0-9-]{1,47}[a-z0-9]', slug or '') or visibility not in {'public','private'}:
             raise PlatformError(422, 'Invalid project slug or visibility')
         identifier(request_key)
         name = name or slug
         if not isinstance(name,str) or not 1 <= len(name) <= 160:
             raise PlatformError(422, 'Invalid project name')
         with self.lock:
+            inventory=self._inventory()
             with self.connection(True) as db:
                 row = db.execute('SELECT * FROM projects WHERE owner_id=? AND request_key=?',
                                  (actor.user_id,request_key)).fetchone()
@@ -198,11 +342,16 @@ class PlatformService:
                     project_id = row['id']
                 else:
                     project_id = uuid.uuid4().hex
+                    defaults=self._default_urls(slug)
+                    for environment,url in defaults.items():
+                        self._claim_domain(db,project_id,environment,url,inventory=inventory)
                     try:
                         db.execute('INSERT INTO projects VALUES(?,?,?,?,?,?,?,?,?)',
                             (project_id,slug,name,actor.user_id,visibility,time.time(),request_key,None,'registering'))
                     except sqlite3.IntegrityError:
                         raise PlatformError(409, 'Project slug is unavailable') from None
+                    for environment,url in defaults.items():
+                        db.execute('INSERT INTO domain_plans VALUES(?,?,?,NULL,0)',(project_id,environment,url))
                 native_uuid = row['native_uuid'] if row else None
             if not native_uuid:
                 native = self.backend.create_project(slug, 'chatcoolify-platform-' + project_id)
@@ -215,7 +364,8 @@ class PlatformService:
         item = self.check(actor,project_id)
         with self.connection() as db:
             apps = db.execute('SELECT id,environment,native_uuid,environment_uuid,url FROM apps WHERE project_id=?', (project_id,)).fetchall()
-        return {k:v for k,v in item.items() if k != 'request_key'} | {'applications':[dict(a) for a in apps]}
+        return {k:v for k,v in item.items() if k != 'request_key'} | {
+            'applications':[dict(a) for a in apps],'domains':self.domains(actor,project_id)}
 
     def projects(self, actor):
         self.live(actor)
@@ -270,7 +420,8 @@ class PlatformService:
         if environment not in {'preview','production'}:
             raise PlatformError(422,'Invalid deployment environment')
         with self.lock:
-            with self.connection() as db:
+            inventory=self._inventory()
+            with self.connection(True) as db:
                 release = db.execute('SELECT * FROM releases WHERE id=? AND project_id=?',(release_id,project_id)).fetchone()
                 if not release:
                     raise PlatformError(404,'Release unavailable')
@@ -278,52 +429,71 @@ class PlatformService:
                 if prior:
                     if prior['release_id']!=release_id or prior['environment']!=environment:
                         raise PlatformError(409,'Idempotency key conflicts with prior deployment')
-                    return self.deployment(actor,project_id,prior['id'])
-                active = db.execute("SELECT 1 FROM deployments WHERE project_id=? AND environment=? AND state IN ('dispatching','dispatch_unknown','queued','in_progress')",(project_id,environment)).fetchone()
-                if active:
-                    raise PlatformError(409,'Reconcile the in-flight deployment before submitting another')
-                if rollback and not db.execute("SELECT 1 FROM deployments d JOIN deployment_verifications v ON v.deployment_id=d.id "
-                        "JOIN releases r ON r.id=d.release_id WHERE d.project_id=? AND d.release_id=? "
-                        "AND d.environment='production' AND d.state='finished' "
-                        "AND v.artifact_sha256=r.artifact_sha256 AND v.source_commit=r.source_commit",
-                        (project_id,release_id)).fetchone():
-                    raise PlatformError(409,'Rollback requires a previously successful production release')
-                app = db.execute('SELECT * FROM apps WHERE project_id=? AND environment=?',(project_id,environment)).fetchone()
-            if not app:
-                native_project = self.backend.client.get_project(project['native_uuid'])
-                envs = self.backend.environments(native_project)
-                env = envs[environment]
-                app_id = uuid.uuid4().hex
-                secret = secrets.token_urlsafe(48)
-                native = self.backend.create_source_application(project['native_uuid'],env['uuid'],environment,
-                    project['slug']+'-'+environment,project_id,release['source_commit'])
-                native_uuid = native['uuid']
-                url = (native.get('domains') or native.get('fqdn') or '').split(',')[0].replace('http://','https://',1)
-                if not url:
-                    url = self.backend.application(native_uuid)['fqdn'].split(',')[0].replace('http://','https://',1)
-                self.backend.update_application(native_uuid,domains=self.backend.native_domains(url))
-                self.backend.env(native_uuid,{'PLATFORM_APPLICATION_ID':app_id,'PLATFORM_APPLICATION_KEY':secret,
+                    prior_id=prior['id']
+                else:prior_id=None
+                if not prior_id:
+                    if self._domain_change_inflight(db,project_id,environment):
+                        raise PlatformError(409,'Reconcile the in-flight deployment before submitting another')
+                    if rollback and not db.execute("SELECT 1 FROM deployments d JOIN deployment_verifications v ON v.deployment_id=d.id "
+                            "JOIN releases r ON r.id=d.release_id WHERE d.project_id=? AND d.release_id=? "
+                            "AND d.environment='production' AND d.state='finished' "
+                            "AND v.artifact_sha256=r.artifact_sha256 AND v.source_commit=r.source_commit",
+                            (project_id,release_id)).fetchone():
+                        raise PlatformError(409,'Rollback requires a previously successful production release')
+                    app = db.execute('SELECT * FROM apps WHERE project_id=? AND environment=?',(project_id,environment)).fetchone()
+                    plan=db.execute('SELECT * FROM domain_plans WHERE project_id=? AND environment=?',
+                        (project_id,environment)).fetchone()
+                    urls=[plan['desired_url']]
+                    if app and app['url'] not in urls:urls.append(app['url'])
+                    for row in db.execute('SELECT url FROM domain_routes WHERE project_id=? AND environment=? ORDER BY url',
+                            (project_id,environment)):
+                        if row['url'] not in urls:urls.append(row['url'])
+                    if len(urls)>30:raise PlatformError(409,'Domain alias capacity reached; operator review required')
+                    self._claim_domain(db,project_id,environment,plan['desired_url'],inventory=inventory,
+                        native_uuid=app['native_uuid'] if app else None)
+                    # Immutable old releases do not acquire new runtime behavior by
+                    # upgrading the control plane. A re-upload creates a new source
+                    # with the same website bytes and the current guarded runtime.
+                    if plan['desired_url']!=plan['current_url'] or len(urls)>1:
+                        archive=self.root/'artifacts'/(release['artifact_sha256']+'.zip')
+                        if not archive.is_file() or frontend_files(archive.read_bytes())[1]!=release['dockerfile_sha256']:
+                            raise PlatformError(409,'Upload the site again with the current runtime before changing domains or using legacy aliases')
+                    deployment_id = uuid.uuid4().hex
+                    db.execute('INSERT INTO deployments VALUES(?,?,?,?,?,?,?,?,?)',
+                        (deployment_id,project_id,release_id,environment,None,'dispatching',time.time(),request_key,
+                         'rollback' if rollback else 'deploy'))
+                    db.execute('INSERT INTO domain_deployments VALUES(?,?,?,?)',
+                        (deployment_id,plan['desired_url'],plan['generation'],json.dumps(urls)))
+            if prior_id:return self.deployment(actor,project_id,prior_id)
+            try:
+                if not app:
+                    native_project = self.backend.client.get_project(project['native_uuid'])
+                    envs = self.backend.environments(native_project)
+                    env = envs[environment]
+                    app_id = uuid.uuid4().hex
+                    secret = secrets.token_urlsafe(48)
+                    native = self.backend.create_source_application(project['native_uuid'],env['uuid'],environment,
+                        project['slug']+'-'+environment,project_id,release['source_commit'],domains=plan['desired_url'])
+                    with self.connection(True) as db:
+                        db.execute('INSERT INTO apps(id,project_id,environment,native_uuid,environment_uuid,url,secret) VALUES(?,?,?,?,?,?,?)',
+                            (app_id,project_id,environment,native['uuid'],env['uuid'],plan['desired_url'],secret))
+                    with self.connection() as db:
+                        app = db.execute('SELECT * FROM apps WHERE id=?',(app_id,)).fetchone()
+                # The old URL remains routed throughout the native rolling build.
+                # A running old container keeps its old configuration if build fails.
+                self.backend.update_application(app['native_uuid'],domains=self.backend.native_domains(','.join(urls)),
+                    custom_network_aliases='platform-front-'+app['id'],connect_to_docker_network=True)
+                self.backend.env(app['native_uuid'],{'PLATFORM_APPLICATION_ID':app['id'],'PLATFORM_APPLICATION_KEY':app['secret'],
                     'PLATFORM_CONTROL_URL':self.control_url,'PLATFORM_INTERNAL_URL':self.internal_url,
-                    'PLATFORM_PUBLIC_URLS':url})
+                    'PLATFORM_PUBLIC_URLS':','.join(urls),'PLATFORM_DOMAIN_GENERATION':str(plan['generation']),
+                    'PLATFORM_ROUTE_ALIASES':app['aliases']})
+                self.check(actor,project_id,'deploy')
+                self.sources.retain(project_id,release['source_commit'])
+                self.backend.update_application(app['native_uuid'],git_commit_sha=release['source_commit'])
+            except Exception:
                 with self.connection(True) as db:
-                    db.execute('INSERT INTO apps(id,project_id,environment,native_uuid,environment_uuid,url,secret) VALUES(?,?,?,?,?,?,?)',
-                        (app_id,project_id,environment,native_uuid,env['uuid'],url,secret))
-                with self.connection() as db:
-                    app = db.execute('SELECT * FROM apps WHERE id=?',(app_id,)).fetchone()
-            # Reconcile platform-owned runtime configuration for existing apps too.
-            # Stable aliases avoid relying on Coolify's timestamped container names.
-            self.backend.update_application(app['native_uuid'],custom_network_aliases='platform-front-'+app['id'],
-                connect_to_docker_network=True)
-            self.backend.env(app['native_uuid'],{'PLATFORM_APPLICATION_ID':app['id'],'PLATFORM_APPLICATION_KEY':app['secret'],
-                'PLATFORM_CONTROL_URL':self.control_url,'PLATFORM_INTERNAL_URL':self.internal_url,
-                'PLATFORM_PUBLIC_URLS':app['url'],'PLATFORM_ROUTE_ALIASES':app['aliases']})
-            self.check(actor,project_id,'deploy')
-            self.sources.retain(project_id,release['source_commit'])
-            self.backend.update_application(app['native_uuid'],git_commit_sha=release['source_commit'])
-            deployment_id = uuid.uuid4().hex
-            with self.connection(True) as db:
-                db.execute('INSERT INTO deployments VALUES(?,?,?,?,?,?,?,?,?)',
-                    (deployment_id,project_id,release_id,environment,None,'dispatching',time.time(),request_key,'rollback' if rollback else 'deploy'))
+                    db.execute("UPDATE deployments SET state='configuration_failed' WHERE id=?",(deployment_id,))
+                raise
             try:
                 native_deployment = self.backend.deploy(app['native_uuid'])
             except Exception:
@@ -335,6 +505,27 @@ class PlatformService:
                 db.execute("UPDATE deployments SET native_uuid=?,state='queued' WHERE id=?",(native_deployment,deployment_id))
                 self.audit(db,actor,project_id,'rollback' if rollback else 'deploy',native_deployment)
         return self.deployment(actor,project_id,deployment_id)
+
+    def _activate_domain(self,db,item):
+        capture=db.execute('SELECT * FROM domain_deployments WHERE deployment_id=?',(item['id'],)).fetchone()
+        if not capture:return
+        plan=db.execute('SELECT * FROM domain_plans WHERE project_id=? AND environment=?',
+            (item['project_id'],item['environment'])).fetchone()
+        if plan['current_url']==capture['desired_url']:return
+        if plan['generation']!=capture['generation'] or plan['desired_url']!=capture['desired_url']:return
+        probe=getattr(self.backend,'runtime_domain_state',None)
+        actual=probe(item['url'],item['app_id'],item['app_secret']) if probe else None
+        expected_runtime=digest(Path(__file__).with_name('platform_runtime.py').read_bytes())
+        if (not actual or actual.get('artifact_sha256')!=item['artifact_sha256']
+                or actual.get('runtime_sha256')!=expected_runtime
+                or str(actual.get('domain_generation'))!=str(capture['generation'])
+                or actual.get('public_urls')!=json.loads(capture['urls'])):return
+        db.execute('UPDATE apps SET url=? WHERE id=?',(capture['desired_url'],item['app_id']))
+        db.execute('UPDATE domain_plans SET current_url=? WHERE project_id=? AND environment=?',
+            (capture['desired_url'],item['project_id'],item['environment']))
+        for url in json.loads(capture['urls']):
+            db.execute('INSERT OR IGNORE INTO domain_routes VALUES(?,?,?)',(item['project_id'],item['environment'],url))
+        item['url']=capture['desired_url']
 
     def deployment(self, actor, project_id, deployment_id):
         with self.lock:
@@ -403,6 +594,7 @@ class PlatformService:
                                     (deployment_id,item['artifact_sha256'],item['source_commit'],time.time()))
                                 item['verified_at']=db.execute('SELECT verified_at FROM deployment_verifications WHERE deployment_id=?',
                                     (deployment_id,)).fetchone()[0]
+                                self._activate_domain(db,item)
                             item['runtime_verified']=True
                         elif not proof:state='verifying'
                 elif not proof:
@@ -415,6 +607,16 @@ class PlatformService:
         item.pop('app_secret',None);item.pop('app_id',None)
         item['backend_ref'] = {'provider':'coolify','team_id':self.backend.team_id,'project_uuid':project['native_uuid'],
             'environment_uuid':item.pop('environment_uuid'),'application_uuid':item.pop('app_uuid'),'deployment_uuid':item['native_uuid']}
+        item['domain']=next(x for x in self.domains(actor,project_id)['environments'] if x['environment']==item['environment'])
+        with self.connection() as db:
+            captured=db.execute('SELECT desired_url,generation FROM domain_deployments WHERE deployment_id=?',(deployment_id,)).fetchone()
+        pending_attempt=(captured and captured['desired_url']==item['domain']['desired_url']
+            and captured['generation']==item['domain']['generation']
+            and captured['desired_url']!=item['domain']['current_url'])
+        if (item['state']=='finished' and item['runtime_active'] and pending_attempt
+                and hasattr(self.backend,'runtime_domain_state')):
+            item['state']='verifying_domain'
+            with self.connection(True) as db:db.execute('UPDATE deployments SET state=? WHERE id=?',(item['state'],deployment_id))
         return item
 
     def deployments(self, actor, project_id):

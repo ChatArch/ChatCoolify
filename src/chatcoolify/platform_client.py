@@ -62,6 +62,19 @@ class PlatformClient:
         return self.request('/projects',method='POST',payload={'slug':slug,'name':name,'visibility':visibility,
             'request_key':request_key or 'create-'+slug})
 
+    def domains(self,project_id):
+        """Read desired and active addresses for an authorized project."""
+        identifier(project_id)
+        return self.request(f'/projects/{project_id}/domains')
+
+    def set_domain(self,project_id,hostname,*,environment='production'):
+        """Reserve a managed hostname for the next explicit native deployment."""
+        identifier(project_id)
+        if environment not in {'preview','production'}:
+            raise PlatformError(422,'Invalid environment')
+        return self.request(f'/projects/{project_id}/domains/{environment}',method='PUT',
+                            payload={'hostname':hostname})
+
     def upload(self,project_id,directory,*,original_commit=None):
         identifier(project_id)
         data=make_archive(Path(directory))
@@ -102,4 +115,5 @@ def configured_service():
         source_url_base=value('CHATCOOLIFY_SOURCE_URL'),source_key_uuid=value('CHATCOOLIFY_SOURCE_KEY_UUID'),
         external_tls=str(value('CHATCOOLIFY_EXTERNAL_TLS')).lower() in {'true','1'})
     return PlatformService(value('CHATCOOLIFY_PLATFORM_DATA'),backend,control_url=value('CHATCOOLIFY_CONTROL_URL'),
-        internal_url=value('CHATCOOLIFY_INTERNAL_URL'))
+        internal_url=value('CHATCOOLIFY_INTERNAL_URL'),domain_suffix=value('CHATCOOLIFY_DOMAIN_SUFFIX'),
+        reserved_hostnames=[h.strip() for h in (value('CHATCOOLIFY_RESERVED_HOSTS') or '').split(',') if h.strip()])
