@@ -22,6 +22,7 @@ from urllib.request import Request, build_opener, HTTPRedirectHandler
 
 COOKIE = '__Host-platform-reader'
 STATE_COOKIE = '__Host-platform-login-state'
+GUEST_COOKIE = '__Host-platform-guest'
 MAX_BODY = 2 * 1024 * 1024
 
 
@@ -49,6 +50,8 @@ class FrontendHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header('Content-Type', kind)
         self.send_header('Content-Length', str(len(body)))
+        for cookie in getattr(self,'_guest_response_cookies',[]):
+            self.send_header('Set-Cookie',cookie)
         for k, v in (headers or {}).items():
             for item in (v if isinstance(v,list) else [v]):
                 self.send_header(k, item)
@@ -88,15 +91,17 @@ class FrontendHandler(BaseHTTPRequestHandler):
             return 503, {'error': 'Authorization unavailable'}
 
     def context(self):
-        return {'reader_token': self.token(), 'method': self.command, 'path': self.path,
+        return {'reader_token': self.token(), 'guest_token':self.token(GUEST_COOKIE),
+                'method': self.command, 'path': self.path,
                 'origin': self.headers.get('Origin', ''),
                 'csrf': self.headers.get('X-CSRF-Token', ''),
                 'host': self.headers.get('Host', '')}
 
-    def redirect_login(self):
+    def redirect_login(self,return_path=None):
         state=secrets.token_urlsafe(40)
         target = os.environ['PLATFORM_CONTROL_URL'].rstrip('/') + '/login?' + urlencode({
-            'application': os.environ['PLATFORM_APPLICATION_ID'], 'state':state,'return_path': self.path})
+            'application': os.environ['PLATFORM_APPLICATION_ID'], 'state':state,
+            'return_path':self.path if return_path is None else return_path})
         self.respond(303, b'', headers={'Location': target,'Set-Cookie':
             f'{STATE_COOKIE}={state}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=120'})
 
@@ -116,6 +121,7 @@ class FrontendHandler(BaseHTTPRequestHandler):
         self.handle_request()
 
     def handle_request(self):
+        self._guest_response_cookies=[]
         try:
             path = urlsplit(self.path).path
             if path == '/__platform/health' and self.command in {'GET', 'HEAD'}:
@@ -151,6 +157,12 @@ class FrontendHandler(BaseHTTPRequestHandler):
                     if parsed_path.query:target+='?'+parsed_path.query
                     return self.respond(308,b'',headers={'Location':target})
                 return self.respond(421,{'error':'Use the canonical application origin'})
+            if path=='/__platform/login' and self.command in {'GET','HEAD'}:
+                destination=parse_qs(urlsplit(self.path).query,max_num_fields=4).get('return_path',['/'])[0]
+                if (not destination.startswith('/') or destination.startswith('//') or '\\' in destination
+                        or len(destination)>2048 or any(ord(c)<32 for c in destination)):
+                    return self.respond(400,{'error':'Invalid return path'})
+                return self.redirect_login(destination)
             if path == '/__platform/callback' and self.command == 'POST':
                 if self.headers.get('Origin') != os.environ['PLATFORM_CONTROL_URL'].rstrip('/'):
                     return self.respond(403, {'error': 'Invalid login origin'})
@@ -170,11 +182,22 @@ class FrontendHandler(BaseHTTPRequestHandler):
                 return self.redirect_login()
             if status != 200:
                 return self.respond(status, access)
+            guest=access.pop('_guest_cookie',None)
+            age=access.pop('_guest_max_age',None)
+            if guest is not None:
+                if (not isinstance(guest,str) or not guest.isascii() or not 1<=len(guest)<=256
+                        or any(not(c.isalnum() or c in '._-') for c in guest)
+                        or type(age) is not int or not 1<=age<=1800):
+                    return self.respond(503,{'error':'Guest session unavailable'})
+                self._guest_response_cookies.append(
+                    f'{GUEST_COOKIE}={guest}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={age}')
             if path == '/__platform/session':
                 return self.respond(200, access)
             if path == '/__platform/artifact' and self.command in {'GET', 'HEAD'}:
                 return self.respond(200, {'artifact_sha256': os.environ['PLATFORM_ARTIFACT_SHA256']})
             if path in {'/__platform/reauth', '/__platform/logout'} and self.command == 'POST':
+                if not access.get('authenticated'):
+                    return self.respond(403,{'error':'Account sign-in required for this operation'})
                 payload = json.loads(self.body() or b'{}')
                 status, result = self.broker(path.rsplit('/', 1)[1], {**self.context(), 'payload': payload})
                 headers = {'Set-Cookie': f'{COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0'} if path.endswith('/logout') else {}

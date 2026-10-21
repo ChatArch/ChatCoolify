@@ -33,8 +33,8 @@ def setup(tmp_path):
     b=service.users.create_user(owner,'bobby@example.net','Example-bobby-password!')
     aa=service.users.authenticate(a.username,'Example-alice-password!')
     bb=service.users.authenticate(b.username,'Example-bobby-password!')
-    pa=service.create_project(aa,'alice-project',request_key='alice-create')
-    pb=service.create_project(bb,'bobby-project',request_key='bobby-create')
+    pa=service.create_project(aa,'alice-project',visibility='private',request_key='alice-create')
+    pb=service.create_project(bb,'bobby-project',visibility='private',request_key='bobby-create')
     return service,owner,aa,bb,pa,pb
 
 
@@ -63,7 +63,7 @@ def test_real_managed_accounts_project_acl_collaboration_and_admin_boundary(setu
 
 def test_idempotent_native_registration_artifact_commit_deploy_and_provenance(setup,tmp_path):
     s,admin,a,b,pa,pb=setup
-    assert s.create_project(a,'alice-project',request_key='alice-create')['id']==pa['id']
+    assert s.create_project(a,'alice-project',visibility='private',request_key='alice-create')['id']==pa['id']
     raw=artifact(tmp_path)
     r=s.upload(a,pa['id'],raw)
     assert s.upload(a,pa['id'],raw)['id']==r['id']
@@ -337,7 +337,26 @@ def test_account_console_is_private_scoped_escaped_and_logout_revokes_session(se
         assert pa['slug'] in page and pb['slug'] not in page
         assert '&lt;script&gt;private-only&lt;/script&gt;' in page
         assert '<script>private-only</script>' not in page
-        assert 'viewport' in page and 'domains set' in page
+        from html.parser import HTMLParser
+
+        class Forms(HTMLParser):
+            def __init__(self):
+                super().__init__()
+                self.forms = []
+
+            def handle_starttag(self, tag, attrs):
+                if tag == 'form':
+                    self.forms.append(dict(attrs))
+
+        forms = Forms()
+        forms.feed(page)
+        assert 'viewport' in page
+        assert any(form.get('data-kind') == 'create' for form in forms.forms)
+        assert any(form.get('data-kind') == 'visibility' and form.get('data-project') == pa['id']
+                   for form in forms.forms)
+        assert {form.get('data-environment') for form in forms.forms
+                if form.get('data-kind') == 'domain' and form.get('data-project') == pa['id']} == {
+                    'preview', 'production'}
         # The console logout button uses the same CSRF-protected cookie API.
         with pytest.raises(HTTPError) as rejected:
             urlopen(Request(origin + '/api/platform/v1/logout', data=b'', headers=headers))

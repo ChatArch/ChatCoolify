@@ -2,11 +2,11 @@
 
 `coolify platform` supports invited trusted collaborators: register a frontend project, upload a built local directory, inspect a preview, explicitly publish, view native logs and roll back. Independent backends remain native Coolify applications/services and can be associated with a project. The existing `CoolifyClient` and Git/backend API remain available.
 
-Open the platform origin in a browser and sign in to see projects you own or have been granted access to, including production/preview links, your role and pending domain settings. The native Coolify administrator console is a separate surface; a platform account does not automatically receive native server or Team administration privileges.
+Open the platform origin in a browser and sign in to see projects you own or have been granted access to, including production/preview links, your role and pending domain settings. Owners can create projects, select public/private visitor access, edit domain prefixes and explicitly apply them in this dashboard. Public website visitors do not sign in. The native Coolify administrator console is a separate surface; a platform account does not automatically receive native server or Team administration privileges.
 
 ```bash
 coolify platform --profile work login --url https://<platform-origin> --username <account>
-coolify platform --profile work projects create my-site --visibility private
+coolify platform --profile work projects create my-site
 coolify platform --profile work upload PROJECT_ID ./dist
 coolify platform --profile work preview PROJECT_ID RELEASE_ID
 coolify platform --profile work status PROJECT_ID
@@ -29,7 +29,7 @@ coolify platform --profile work domains set PROJECT_ID notes.apps.example.net
 coolify platform --profile work domains set PROJECT_ID notes-preview.apps.example.net --environment preview
 ```
 
-Only the project owner can reserve another hostname. It must be one label under the managed suffix, without scheme, path or port. A setting does not publish or change the live URL. Upload the built directory again to package the current runtime, preview it and explicitly publish; activation follows native deployment success and signed runtime digest verification. Previous GET/HEAD addresses redirect to the canonical address and stay reserved. A failed deployment keeps the old canonical address.
+Only the project owner can reserve another hostname. It must be one label under the managed suffix, without scheme, path or port. A setting does not publish or change the live URL. For a published environment, use the dashboard Save and apply action or `domains apply PROJECT_ID --environment production`. This repackages the verified published artifact with the current runtime into an immutable release when necessary; it never publishes an unpublished draft. Normal upload/preview/publish remains available. Activation follows native deployment success and signed runtime digest verification. Previous GET/HEAD addresses redirect to the canonical address and stay reserved. A failed deployment keeps the old canonical address.
 
 `domains list` exposes `desired_url`, `current_url` and `pending`. The SDK uses the same contract through `client.domains(project_id)` and `client.set_domain(project_id, "notes.apps.example.net", environment="production")`. Domain activation does not migrate backend data. Backends that validate Origin, such as ChatComment, need an additive authorization of the new origin while preserving existing data/settings. External bring-your-own domains still require ownership, certificate and cross-site identity work; managed-prefix customization does not claim that capability.
 
@@ -42,6 +42,14 @@ The SDK exposes stable platform IDs and sanitized native Team/Project/Environmen
 `runtime_verified` and `verified_at` persist evidence that this deployment was actually verified; `runtime_active` describes the current probe. Verified historical deployments retain successful status. An older deployment that was never verified becomes `superseded_unverified` and cannot authorize rollback. Upgrades do not treat legacy `finished` metadata as verification evidence; an active version can acquire proof through a live probe. Rollback requires a previously verified production release in the same project.
 
 Source keys stay in server/Coolify secret storage, outside application images. An SSH forced command only permits read-only `git-upload-pack` beneath the registered source root, rejecting shell access, writes and forwarding. Each build commit retains an immutable source ref; the individual repository allows reachable-SHA fetches so native shallow clones can roll back after main advances. Verify repository URL and custom-port syntax against the installed native version. No anonymous Git HTTP/daemon endpoint is provided.
+
+## Public visitors, comments and management
+
+New projects default to `public`: visitors read HTML/assets without a platform account. Use explicit `--visibility private` for restricted sites. Existing projects keep their current policy on upgrade. Owners change visibility in the dashboard, with `projects visibility PROJECT_ID public|private`, or `client.set_visibility(...)`. Opening access first synchronizes registered ChatComment policy; tightening first protects the frontend. Failure keeps the frontend private. This owner publication decision does not fabricate password reauthentication for comment management.
+
+Public anonymous comments use short-lived signed host-only HttpOnly guest cookies, a separate CSRF token and exact same-origin checks. The raw backend still rejects unsigned requests. The bounded per-process budget is 10 posts per guest session/app/minute; a new cookie or restart resets it, so this is not a global IP/WAF abuse-control system. Owners can explicitly enter `/__platform/login?return_path=/` to manage a public site. Comment settings, exports and moderation still require owner authorization and password reauthentication.
+
+The domain SDK also provides `client.apply_domain(project_id, environment="production")` for an explicit application of the reserved address to currently published bytes.
 
 ## Identity and access
 

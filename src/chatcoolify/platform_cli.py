@@ -85,13 +85,23 @@ def project_list(ctx):output(client(ctx).request('/projects'))
 @projects.command('create')
 @click.argument('slug')
 @click.option('--name')
-@click.option('--visibility',type=click.Choice(['private','public']),default='private')
+@click.option('--visibility',type=click.Choice(['private','public']),default='public',show_default=True)
 @click.option('--request-key',help='Stable idempotency key; default is derived from slug.')
 @click.pass_context
 @boundary
 def project_create(ctx,slug,name,visibility,request_key):
     """Create one native-backed project; repeat registration is idempotent."""
     output(client(ctx).create_project(slug,name=name,visibility=visibility,request_key=request_key))
+
+
+@projects.command('visibility')
+@click.argument('project')
+@click.argument('visibility',type=click.Choice(['public','private']))
+@click.pass_context
+@boundary
+def project_visibility(ctx,project,visibility):
+    """Owner: choose public visitor access or explicitly private access."""
+    output(client(ctx).set_visibility(project,visibility))
 
 
 @platform.group()
@@ -121,6 +131,17 @@ def domains_set(ctx,project,hostname,environment):
     without scheme, path or port. This does not publish or change a live URL.
     """
     output(client(ctx).set_domain(project,hostname,environment=environment))
+
+
+@domains.command('apply')
+@click.argument('project')
+@click.option('--environment',type=click.Choice(['production','preview']),default='production',show_default=True)
+@click.option('--request-key',help='Reuse this key after an interrupted apply request.')
+@click.pass_context
+@boundary
+def domains_apply(ctx,project,environment,request_key):
+    """Apply a reserved domain using the currently published website bytes."""
+    output(client(ctx).apply_domain(project,environment=environment,request_key=request_key))
 
 
 @platform.command()

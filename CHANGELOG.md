@@ -7,12 +7,14 @@
 - Readable production and preview hostnames derived from project slugs, with owner-managed domain reservations through the Python SDK, HTTP API and `coolify platform domains` commands.
 - Transactional project-wide hostname claims, infrastructure reservations and native application, Compose and service-domain conflict discovery.
 - Staged domain changes activated only after native deployment and runtime/configuration verification; retained old addresses redirect reads to the verified canonical origin.
-- Responsive account website dashboard showing authorized projects, environment addresses, pending domain settings and CSRF-protected logout.
+- Responsive owner dashboard to create sites, choose public/private visitor access, reserve readable domain prefixes and explicitly apply changes to currently published artifacts.
+- Public-by-default frontend reads and anonymous ChatComment transport with signed HttpOnly guest sessions, Origin/CSRF validation and bounded per-session rate limits; authenticated owner management remains separate.
+- Owner-only visitor-policy synchronization for registered comment services and explicit login on public sites.
 
 ### Fixed
 
 - Preserve existing canonical URLs and successful deployment evidence during metadata migration and staged domain changes, including failed-deployment rollback.
-- Require explicit re-upload when an immutable older runtime cannot safely implement a domain change; never rewrite a historical release silently.
+- Apply domains by repackaging the verified published artifact into a new immutable runtime release when needed; never rewrite historical sources or accidentally publish an unpublished draft.
 
 ## 0.2.1 - 2026-10-21
 

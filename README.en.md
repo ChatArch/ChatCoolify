@@ -72,7 +72,7 @@ coolify --allow-write website-create ...
 ## Development
 
 ```bash
-python -m pip install -e '.[dev,docs]'
+python -m pip install -e '.[dev,docs,comments]'
 python -m pytest -q
 python -m mkdocs build --strict
 python -m build

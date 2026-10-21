@@ -58,9 +58,14 @@ class PlatformClient:
         value=self.request('/login',method='POST',payload={'username':username,'password':password})
         self.token=value['token'];return value
 
-    def create_project(self,slug,*,name=None,visibility='private',request_key=None):
+    def create_project(self,slug,*,name=None,visibility='public',request_key=None):
         return self.request('/projects',method='POST',payload={'slug':slug,'name':name,'visibility':visibility,
             'request_key':request_key or 'create-'+slug})
+
+    def set_visibility(self,project_id,visibility):
+        identifier(project_id)
+        if visibility not in {'public','private'}:raise PlatformError(422,'Invalid project visibility')
+        return self.request(f'/projects/{project_id}',method='PATCH',payload={'visibility':visibility})
 
     def domains(self,project_id):
         """Read desired and active addresses for an authorized project."""
@@ -74,6 +79,15 @@ class PlatformClient:
             raise PlatformError(422,'Invalid environment')
         return self.request(f'/projects/{project_id}/domains/{environment}',method='PUT',
                             payload={'hostname':hostname})
+
+    def apply_domain(self,project_id,*,environment='production',request_key=None):
+        identifier(project_id)
+        if environment not in {'preview','production'}:raise PlatformError(422,'Invalid environment')
+        key=request_key or uuid.uuid4().hex
+        try:return self.request(f'/projects/{project_id}/domains/{environment}/apply',method='POST',
+                                payload={'request_key':key})
+        except PlatformError as exc:
+            raise PlatformError(exc.status,str(exc)+'; retry with request key '+key) from None
 
     def upload(self,project_id,directory,*,original_commit=None):
         identifier(project_id)

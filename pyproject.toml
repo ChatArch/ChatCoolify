@@ -40,7 +40,7 @@ coolify = "chatcoolify.cli:main"
 chatcoolify = "chatcoolify.config"
 
 [project.optional-dependencies]
-comments = ["ChatComment>=0.2.0,<0.3.0"]
+comments = ["ChatComment>=0.2.2,<0.3.0"]
 dev = [
     "build>=1.2,<2.0",
     "pytest>=8.0,<10.0",
