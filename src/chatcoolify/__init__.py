@@ -10,7 +10,7 @@ from .client import (
     PublicApplicationSpec,
 )
 
-__version__ = "0.2.3"
+__version__ = "0.2.4"
 
 from .platform import PlatformService
 from .platform_client import PlatformClient

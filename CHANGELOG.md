@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.4 - 2026-10-27
+
+### Fixed
+
+- Align the Chinese and English package descriptions with the actual released site-management and signed-projection capabilities.
+- Remove obsolete local-validation version/status claims from active documentation and add a regression sweep across both READMEs, developer notes and documentation sources.
+- Keep runtime behavior, APIs, package identity and CLI names unchanged.
+
 ## 0.2.3 - 2026-10-27
 
 ### Added
