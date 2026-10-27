@@ -90,4 +90,8 @@ A public project may explicitly expose `GET` / `HEAD /api/public/catalog`, `/api
 
 Backends must independently verify the actual method, path/query, body and site read scope, and return an explicit public-field projection. Raw project material, connection details, private human records and credentials are not public data. These projection paths are read-only; private reads, managed writes and CSRF retain their own authentication gates. Project visibility covers both Preview and Production, so verify the intended scope before changing it. A login overlay is not backend authorization.
 
-This worktree's `0.2.2+publicread.1` is a private validation build based on public `0.2.2`, not a formal PyPI release.
+The released distribution includes these signed read-only projections. Actual public access still follows each project's persisted visibility policy.
+
+### Native project access management
+
+Authenticated project owners can follow `GET /__platform/manage` to the exact native console project settings. Production and Preview share the persisted visibility policy. Public transitions require explicit confirmation; saving checks the expected previous mode and reads back the result. Ordinary reader accounts cannot manage access. This capability does not add or rename CLI commands.

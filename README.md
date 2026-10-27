@@ -92,9 +92,8 @@ MIT。
 
 后端必须独立验证准确的方法、路径/查询、正文与站点 read 权限，并生成明确允许的公开字段。不要把原始项目材料、来源连接、人工私人记录或凭据直接当成公开响应。投影路径只读；私有读取、管理写入和 CSRF 仍执行各自的认证规则。项目可见性是项目级策略，切换前同时核对预览与生产范围，不以一层登录遮罩替代后端权限。
 
-本工作树的 `0.2.2+access.1` 是基于已发布 `0.2.2` 的私有验证构建，不是 PyPI 正式发版。
+正式发布包包含上述签名只读投影能力；是否允许公开读取仍由项目的持久化访问策略决定。
 
+### 原生项目访问管理
 
-### Native project access management
-
-Authenticated project owners can follow `GET /__platform/manage` to the existing console project anchor. Browser settings use the persisted project visibility for both production and preview, with an explicit public confirmation, stale-mode precondition and GET readback after saving. Ordinary reader accounts cannot manage access. This private build does not add or rename CLI commands.
+已认证的项目所有者可通过 `GET /__platform/manage` 进入原生控制台的准确项目设置。正式站与预览共用持久化的访问模式；公开切换需要明确确认，保存时验证预期的旧模式并再次读取结果。普通阅读账号不能管理访问权限。该能力不新增或改名 CLI 命令。
