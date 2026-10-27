@@ -84,3 +84,17 @@ python -m twine check dist/*
 ## 许可证
 
 MIT。
+
+
+## 签名访客的公开只读投影
+
+公开项目可以由受信任服务显式实现 `GET` / `HEAD /api/public/catalog`、`/api/public/state` 和 `/api/public/projects/{id}`（ID 为 1–80 个 ASCII 字母、数字、下划线或连字符）。平台仍按应用和站点绑定签名，访客上下文保持 `authenticated=False`，不因签名或客户端身份声明成为已登录所有者。普通私有 API 不在访客白名单中；此扩展不改变既有评论提交协议。
+
+后端必须独立验证准确的方法、路径/查询、正文与站点 read 权限，并生成明确允许的公开字段。不要把原始项目材料、来源连接、人工私人记录或凭据直接当成公开响应。投影路径只读；私有读取、管理写入和 CSRF 仍执行各自的认证规则。项目可见性是项目级策略，切换前同时核对预览与生产范围，不以一层登录遮罩替代后端权限。
+
+本工作树的 `0.2.2+access.1` 是基于已发布 `0.2.2` 的私有验证构建，不是 PyPI 正式发版。
+
+
+### Native project access management
+
+Authenticated project owners can follow `GET /__platform/manage` to the existing console project anchor. Browser settings use the persisted project visibility for both production and preview, with an explicit public confirmation, stale-mode precondition and GET readback after saving. Ordinary reader accounts cannot manage access. This private build does not add or rename CLI commands.
