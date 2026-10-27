@@ -14,6 +14,7 @@ import json
 import mimetypes
 import os
 import secrets
+import re
 import time
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -191,6 +192,19 @@ class FrontendHandler(BaseHTTPRequestHandler):
                     return self.respond(503,{'error':'Guest session unavailable'})
                 self._guest_response_cookies.append(
                     f'{GUEST_COOKIE}={guest}; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age={age}')
+            if path == '/__platform/manage' and self.command in {'GET', 'HEAD'}:
+                if access.get('authenticated') is not True or access.get('can_manage_project') is not True:
+                    return self.respond(403, {'error': 'Project owner permission required'})
+                target=access.get('management_url')
+                if not isinstance(target,str):
+                    return self.respond(503, {'error': 'Management destination unavailable'})
+                destination=urlsplit(target)
+                control=urlsplit(os.environ['PLATFORM_CONTROL_URL'])
+                if (destination.scheme!=control.scheme or destination.netloc!=control.netloc
+                        or destination.username or destination.password or destination.path!='/'
+                        or destination.query or not re.fullmatch(r'project-[A-Za-z0-9_-]{1,80}',destination.fragment)):
+                    return self.respond(503, {'error': 'Management destination unavailable'})
+                return self.respond(303, b'', headers={'Location':target})
             if path == '/__platform/session':
                 return self.respond(200, access)
             if path == '/__platform/artifact' and self.command in {'GET', 'HEAD'}:

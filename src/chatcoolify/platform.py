@@ -374,12 +374,19 @@ class PlatformService:
                 'WHERE p.owner_id=? OR g.user_id=? ORDER BY p.created_at LIMIT 1000', (actor.user_id,actor.user_id))]
         return [self.project(actor,p) for p in ids]
 
-    def set_visibility(self,actor,project_id,visibility):
+    def set_visibility(self,actor,project_id,visibility,*,expected_visibility=None):
         """Publishing access is independent of management-account permissions."""
         self.check(actor,project_id,'manage_visibility')
         if visibility not in {'public','private'}:
             raise PlatformError(422,'Invalid project visibility')
+        if expected_visibility is not None and expected_visibility not in {'public','private'}:
+            raise PlatformError(422,'Invalid expected project visibility')
         with self.lock:
+            if expected_visibility is not None:
+                with self.connection() as db:
+                    current=db.execute('SELECT visibility FROM projects WHERE id=?',(project_id,)).fetchone()
+                if not current or current['visibility']!=expected_visibility:
+                    raise PlatformError(409,'Project visibility changed; reload current settings')
             # Tightening access takes effect before any backend request. Opening
             # access happens only after all registered comment policies agree.
             if visibility=='private':
@@ -846,7 +853,7 @@ class PlatformService:
             raise PlatformError(403,'Same-origin guest CSRF validation required')
         with self.connection() as db:
             sites=[row[0] for row in db.execute('SELECT site_id FROM services WHERE project_id=?',(app['project_id'],))]
-        access={'authenticated':False,'read':True,'csrf_token':csrf,
+        access={'authenticated':False,'read':True,'csrf_token':csrf,'can_manage_project':False,
             'subject':'guest:'+digest(cookie.encode())[:32],
             'site_permissions':{site:{'read':True,'comment':True,'manage':False,'owner':False,
                 'management_until':0} for site in sites}}
@@ -897,6 +904,8 @@ class PlatformService:
                     (digest(token.encode()),app['project_id'],site)).fetchone()
                 grants[site]=grant['expires'] if grant and grant['expires']>time.time() else 0
         return {'authenticated':True,'subject':session.principal.user_id,'read':True,'csrf_token':session.csrf_token,
+            'can_manage_project':project['role']=='owner',
+            'management_url':self.control_url+'/#project-'+app['project_id'] if project['role']=='owner' else None,
             'site_permissions':{site:{'read':True,'comment':True,'manage':project['role']=='owner',
                 'owner':project['role']=='owner','management_until':until} for site,until in grants.items()}}
 
@@ -1018,11 +1027,15 @@ class PlatformService:
             parsed=urlsplit(downstream)
             public_api=re.fullmatch(r'/api/sites/([A-Za-z0-9_-]{1,64})/(config|comments)',parsed.path)
             same_site=public_api and public_api[1]==binding['site_id']
+            # An explicit backend opt-in namespace, never the private API.
+            # Preserve the signed anonymous identity and site read scope; the
+            # backend must independently project public fields and reject writes.
+            projection=re.fullmatch(r'/api/public/(?:catalog|state|projects/[A-Za-z0-9_-]{1,80})',parsed.path)
             permitted=(method in {'GET','HEAD'} and
-                (parsed.path in {'/widget.js','/widget.css','/board'} or same_site))
+                (parsed.path in {'/widget.js','/widget.css','/board'} or same_site or projection))
             submission=method=='POST' and same_site and public_api[2]=='comments'
             if not permitted and not submission:
-                raise PlatformError(403,'Guest access is limited to reading and adding comments')
+                raise PlatformError(403,'Guest access is limited to registered public reads and adding comments')
             # POST was already checked by authorize(); GET can use the freshly
             # issued internal cookie when a visitor opens a service directly.
             cookie=self._guest_cookie(app,access.get('_guest_cookie') or payload.get('guest_token',''))

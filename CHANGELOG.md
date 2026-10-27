@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.3 - 2026-10-27
+
+### Added
+
+- Owner-only site-management metadata and an authenticated same-origin handoff to the exact native project settings entry.
+- Explicit allowlisted signed guest reads for registered project catalog projections; private resources and mutation routes remain authenticated.
+
+### Fixed
+
+- Require the expected current visibility before changing a project's visitor policy, and read back the saved mode rather than reporting stale settings as success.
+- Retain the existing account, grant, session, CSRF and project-owner boundaries when showing management links or changing public/private access.
+- Publish the verified site-access implementation as a normal package version instead of requiring a private local build.
+
 ## 0.2.2 - 2026-10-21
 
 ### Added

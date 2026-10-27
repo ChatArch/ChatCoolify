@@ -82,3 +82,12 @@ python -m twine check dist/*
 ## License
 
 MIT.
+
+
+## Signed guest read-only projections
+
+A public project may explicitly expose `GET` / `HEAD /api/public/catalog`, `/api/public/state`, and `/api/public/projects/{id}` (1–80 ASCII letters, digits, underscores or hyphens). The gateway preserves the application/site binding and `authenticated=False` guest identity. A valid signature or caller-supplied identity is not an authenticated owner. Ordinary private APIs remain outside the guest allowlist; existing comment submission rules are unchanged.
+
+Backends must independently verify the actual method, path/query, body and site read scope, and return an explicit public-field projection. Raw project material, connection details, private human records and credentials are not public data. These projection paths are read-only; private reads, managed writes and CSRF retain their own authentication gates. Project visibility covers both Preview and Production, so verify the intended scope before changing it. A login overlay is not backend authorization.
+
+This worktree's `0.2.2+publicread.1` is a private validation build based on public `0.2.2`, not a formal PyPI release.
