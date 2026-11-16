@@ -14,6 +14,7 @@ from urllib.parse import parse_qs, urlsplit
 from chatlogin import ManagedError
 from .client import CoolifyError
 from .platform_artifact import PlatformError, MAX_UPLOAD
+from .platform_catalog import render_card, TOOLBAR, STYLE as CATALOG_STYLE, SCRIPT as CATALOG_SCRIPT
 
 COOKIE='__Host-platform-control'
 LOGIN_COOKIE='__Host-platform-login-csrf'
@@ -182,15 +183,13 @@ class PlatformHandler(BaseHTTPRequestHandler):
                         f'<option value="public"{public_selected}>公开：任何人可访问</option>'
                         f'<option value="private"{private_selected}>仅登录：仅已授权用户</option></select></label>'
                         '<button>保存访问设置</button><span class="policy-note">正式网站与预览环境共用此设置；仅登录时限已授权账号访问。</span><p class="feedback" role="status"></p></form>')
-            cards.append(f'<article id="project-{project_id}"><div class="card-title"><h2>{html.escape(project["name"])}</h2>'
-                         f'<span class="badge">{visibility} · {html.escape(role)}</span></div>'
-                         f'<p class="slug">{html.escape(project["slug"])}</p>{policy}'+''.join(links)+
+            cards.append(render_card(project, addresses, policy+''.join(links)+
                          f'<details><summary>上传与发布命令</summary><pre>'
                          f'coolify platform upload {project_id} ./dist\n'
                          f'coolify platform preview {project_id} RELEASE_ID\n'
-                         f'coolify platform publish {project_id} RELEASE_ID</pre></details></article>')
+                         f'coolify platform publish {project_id} RELEASE_ID</pre></details>'))
         name=html.escape(account.display_name or account.username)
-        empty='<p class="empty">还没有项目。在下方创建网站，再上传本地构建目录。</p>'
+        empty='<div class="catalog-empty"><h2>还没有网站</h2><p>创建第一个项目，再上传网站构建产物。</p><a href="#create-site">创建网站 →</a></div>'
         style='''*{box-sizing:border-box}body{margin:0;background:#f5f6f3;color:#202b24;font:16px/1.6 system-ui,sans-serif}
         header,main{max-width:1080px;margin:auto;padding:24px}header{display:flex;justify-content:space-between;align-items:center;gap:16px;border-bottom:1px solid #dce2d8}header a{color:inherit;text-decoration:none;font-weight:700}.account{display:flex;align-items:center;gap:14px;min-width:0;font-size:14px}.account span{overflow-wrap:anywhere}
         button{background:white;border:1px solid #b9c7b5;padding:8px 14px;border-radius:7px;color:inherit;cursor:pointer;white-space:nowrap}button:disabled{opacity:.6;cursor:wait}h1{font-size:32px;margin:20px 0 6px}h2{margin:0;font-size:21px;overflow-wrap:anywhere}.intro,.muted,.slug{color:#64705e}.intro{margin:0 0 28px}.cards{display:grid;gap:18px}article,.create{background:white;border:1px solid #dce2d8;border-radius:12px;padding:24px;min-width:0}.card-title{display:flex;align-items:start;justify-content:space-between;gap:16px}.badge{background:#eef2e9;border-radius:6px;padding:3px 9px;white-space:nowrap;font-size:13px}.slug{margin:6px 0 18px;font-size:14px}.address{display:grid;grid-template-columns:100px minmax(0,1fr);gap:12px;margin:24px 0}.address a{color:#355d36;overflow-wrap:anywhere}small{display:block;color:#7a631e;overflow-wrap:anywhere}form{display:flex;align-items:end;gap:10px;flex-wrap:wrap}label{display:grid;gap:5px;color:#53614e;font-size:13px;min-width:0}input,select{font:15px system-ui;padding:9px 10px;border:1px solid #becab7;border-radius:6px;background:white;color:#202b24;min-width:0;max-width:100%}.domain-form{margin-top:12px}.domain-form input{width:190px}.suffix{font-size:13px;color:#64705e;align-self:center;overflow-wrap:anywhere}.feedback{flex-basis:100%;margin:0;color:#715a1d;font-size:13px;overflow-wrap:anywhere}.feedback:empty{display:none}.policy-note{flex-basis:100%;font-size:13px;color:#64705e}.visibility-form{padding:14px;background:#f5f7f1;border-radius:8px}.create{margin-top:24px}.create h2{margin-bottom:14px}.create p{color:#64705e;font-size:14px}details{margin-top:20px;border-top:1px solid #e6ebe2;padding-top:14px;font-size:13px}summary{cursor:pointer;color:#64705e}code,pre{overflow-wrap:anywhere;white-space:pre-wrap;font-size:12px}aside{margin-top:24px;padding:18px;background:#edf1e8;border-radius:10px;font-size:14px}.empty{padding:24px;background:white;border-radius:12px}
@@ -212,11 +211,14 @@ class PlatformHandler(BaseHTTPRequestHandler):
           for(let n=0;n<60;n++){await new Promise(resolve=>setTimeout(resolve,2500));const result=await request(base+'/'+id+'/deployments/'+job.id,'GET');if(result.state==='finished'&&result.runtime_active&&result.runtime_verified&&!result.domain.pending){location.reload();return}if(['failed','cancelled','configuration_failed','provenance_mismatch'].includes(result.state)){delete form.dataset.requestKey;throw new Error('域名更新未完成，原入口保留。可重试或查看部署状态。')}}
           message.textContent='部署仍在进行，可稍后刷新查看。';
         }catch(error){message.textContent=form.dataset.kind==='visibility'?'未确认设置生效，请刷新核对当前访问方式后再操作；请勿直接重复保存。':error.message}finally{button.disabled=false}}});'''.replace('__CSRF__',json.dumps(session.csrf_token).replace('<','\\u003c'))
-        page=f'''<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>我的网站 · ChatCoolify</title><style>{style}</style>
-        <header><a href="/">ChatCoolify</a><div class="account"><span>{name}</span><button id="logout">退出</button></div></header>
-        <main><h1>我的网站</h1><p class="intro">{len(projects)} 个项目 · 这里管理你的网站；访客访问公开网站无需登录。</p><section class="cards">{''.join(cards) or empty}</section>
-        <section class="create"><h2>创建网站</h2><form data-kind="create"><label>网站名称<input name="name" placeholder="我的网站" maxlength="160"></label><label>默认域名前缀<input name="slug" placeholder="my-site" pattern="[a-z][a-z0-9-]{{1,47}}[a-z0-9]" required maxlength="49"></label><label>访客访问<select name="visibility"><option value="public" selected>公开：任何人可访问</option><option value="private">仅登录：仅已授权用户</option></select></label><button>创建网站</button><p class="feedback" role="status"></p></form><p>创建后上传本地构建目录，先预览，再发布。公开网站可直接分享，访客不需要平台账号。</p></section>
-        <aside>账号登录保护网站管理、部署与设置。公开阅读与普通留言独立于管理账号；选择私有时才要求授权访问。构建和运行使用同一套 Coolify 基础设施。</aside></main><script>{script}</script></html>'''.encode()
+        page=f'''<!doctype html><html lang="zh"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>我的网站 · ChatCoolify</title><style>{style}{CATALOG_STYLE}</style>
+        <header><a href="/">ChatCoolify</a><div class="account"><a class="create-link" href="#create-site">＋ 创建网站</a><span>{name}</span><button id="logout">退出</button></div></header>
+        <main><div class="catalog-heading"><div><p class="catalog-eyebrow">WEBSITE COLLECTION</p><h1>我的网站</h1><p class="intro">已导入的网站，一眼找到。打开正式站点，或继续查看预览。</p></div><span class="catalog-total">{len(projects)} 个项目</span></div>{TOOLBAR}
+        <p class="catalog-result" id="catalog-count" aria-live="polite">显示 {len(projects)} / {len(projects)} 个网站</p>
+        <section class="catalog-grid" id="site-catalog" data-view="cards" aria-label="网站目录">{''.join(cards)}</section>{empty if not cards else ''}
+        <div class="catalog-no-results" id="catalog-no-results" hidden><h2>没有匹配的网站</h2><p>试试其他名称、域名或筛选条件。</p><button id="catalog-reset" type="button">清除筛选</button></div>
+        <section class="create" id="create-site"><h2>创建网站</h2><form data-kind="create"><label>网站名称<input name="name" placeholder="我的网站" maxlength="160"></label><label>默认域名前缀<input name="slug" placeholder="my-site" pattern="[a-z][a-z0-9-]{{1,47}}[a-z0-9]" required maxlength="49"></label><label>访客访问<select name="visibility"><option value="public" selected>公开：任何人可访问</option><option value="private">仅登录：仅已授权用户</option></select></label><button>创建网站</button><p class="feedback" role="status"></p></form><p>创建后上传本地构建目录，先预览，再发布。公开网站可直接分享，访客不需要平台账号。</p></section>
+        <aside>这里仅展示当前账号有权访问的项目。发布状态来自已有访问地址，不代表实时健康检测；域名和权限设置在项目管理中。</aside></main><script>{script}{CATALOG_SCRIPT}</script></html>'''.encode()
         self.respond(200,page,'text/html; charset=utf-8')
 
     def dispatch(self):
