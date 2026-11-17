@@ -29,7 +29,19 @@ coolify --tree
 
 ## 最快开始
 
-已有平台账号可通过 `coolify platform` 完成本地目录上传、原生预览、显式发布及回退；平台按项目授权，普通用户不持有原生 Team token。见[本地项目平台](docs/platform.md)。以下保留原生 Coolify 客户端用法，其写操作仍需 `--allow-write`。
+已有平台账号可通过 `coolify platform` 完成本地目录上传、原生预览、显式发布及回退；平台按项目授权，普通用户不持有原生 Team token。见[本地项目平台](docs/platform.md)。
+
+```bash
+# 按隐藏交互配置平台地址、账号和密码；不把密码写到命令参数。
+chatenv new work -t coolify-platform -i
+chatenv test work -t coolify-platform
+coolify platform --profile work login
+coolify platform --profile work limits
+```
+
+`coolify-platform` 的 ChatEnv 字段是 `CHATCOOLIFY_PLATFORM_URL`、`CHATCOOLIFY_PLATFORM_USERNAME`、敏感的 `CHATCOOLIFY_PLATFORM_PASSWORD`；TokenStore 只缓存会话。默认 ZIP 上限1 GiB，解包大小和条目数默认不限，operator 可通过服务端 ChatEnv 调整，0表示不限。客户端自动读取有效策略；只有旧版服务明确404时兼容旧策略。
+
+以下保留原生 Coolify 客户端用法，其写操作仍需 `--allow-write`。
 
 ```bash
 coolify --base-url https://<coolify-url> health

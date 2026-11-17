@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.5 - 2026-11-17
+
+### Added
+
+- Named ChatEnv platform profiles own the endpoint, account username and sensitive password; CLI login can use configured fields without repeating command arguments.
+- Missing or rejected cached sessions can be renewed from the selected profile before an operation, without replaying ambiguous writes. TokenStore remains a session cache, not a separate credential source.
+- Authenticated artifact-policy discovery and `coolify platform limits`, with server ChatEnv configuration for upload bytes, expanded bytes and archive entries.
+- Default ZIP allowance of 1 GiB, with expanded-size and entry-count business limits disabled by default; zero explicitly means unlimited. Archive path and special-file protections remain enforced.
+- Browse-first platform homepage with card/list views, search, filters and collapsible project management.
+
+### Fixed
+
+- Preserve saved profile credentials when caching a session, retain existing session-only profiles, and validate destinations before credential-bearing authentication.
+- Stream artifact member validation and directory compression rather than reading each expanded member into memory during production validation.
+- Keep ordinary control/JSON body budgets separate from large artifact uploads and align client packaging with the effective server policy.
+
 ## 0.2.4 - 2026-10-27
 
 ### Fixed

@@ -71,13 +71,13 @@ class GitSources:
         subprocess.run(['git','--git-dir',str(repo),'config','uploadpack.allowReachableSHA1InWant','true'],
             check=True,capture_output=True)
 
-    def frontend(self, project_id, archive):
-        files,docker_digest=frontend_files(archive)
+    def frontend(self, project_id, archive, *, limits=None):
+        files,docker_digest=frontend_files(archive,limits=limits)
         return self.commit_files(project_id, files, 'Frontend artifact ' + digest(archive)),docker_digest
 
 
-def frontend_files(archive):
-    validate_archive(archive)
+def frontend_files(archive, *, limits=None):
+    validate_archive(archive,limits=limits,read_files=False)
     artifact_digest=digest(archive)
     runtime=Path(__file__).with_name('platform_runtime.py').read_bytes()
     dockerfile=FRONTEND_DOCKERFILE.replace('ARG ARTIFACT_SHA256',

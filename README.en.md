@@ -29,7 +29,19 @@ Python `>=3.10` is supported. The distribution remains `ChatCoolify` and the Pyt
 
 ## Quick start
 
-Invited platform accounts use `coolify platform` for local uploads, native previews, explicit publishing and rollback with per-project permissions. Ordinary users do not hold native Team tokens. See the [local project platform](docs/platform.en.md). The original native client usage below retains its `--allow-write` gate.
+Invited platform accounts use `coolify platform` for local uploads, native previews, explicit publishing and rollback with per-project permissions. Ordinary users do not hold native Team tokens. See the [local project platform](docs/platform.en.md).
+
+```bash
+# Configure endpoint, username and hidden password without secret command arguments.
+chatenv new work -t coolify-platform -i
+chatenv test work -t coolify-platform
+coolify platform --profile work login
+coolify platform --profile work limits
+```
+
+The named ChatEnv fields are `CHATCOOLIFY_PLATFORM_URL`, `CHATCOOLIFY_PLATFORM_USERNAME` and sensitive `CHATCOOLIFY_PLATFORM_PASSWORD`; TokenStore only caches sessions. ZIP uploads default to1GiB, with expanded-size and entry-count limits disabled by default. Operators configure server policy through ChatEnv; zero means unlimited. Clients discover effective limits, falling back to legacy policy only on an explicit old-server404.
+
+The original native client usage below retains its `--allow-write` gate.
 
 ```bash
 coolify --base-url https://<coolify-url> health

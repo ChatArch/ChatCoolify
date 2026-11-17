@@ -13,11 +13,12 @@ from urllib.parse import parse_qs, urlsplit
 
 from chatlogin import ManagedError
 from .client import CoolifyError
-from .platform_artifact import PlatformError, MAX_UPLOAD
+from .platform_artifact import PlatformError
 from .platform_catalog import render_card, TOOLBAR, STYLE as CATALOG_STYLE, SCRIPT as CATALOG_SCRIPT
 
 COOKIE='__Host-platform-control'
 LOGIN_COOKIE='__Host-platform-login-csrf'
+MAX_CONTROL_BODY=8*1024*1024
 
 
 class PlatformHandler(BaseHTTPRequestHandler):
@@ -48,10 +49,11 @@ class PlatformHandler(BaseHTTPRequestHandler):
             return cookies[name].value if name in cookies else ''
         except Exception:return ''
 
-    def body(self):
+    def body(self,*,artifact=False):
         try:size=int(self.headers.get('Content-Length','0'))
         except ValueError:raise PlatformError(422,'Invalid request length') from None
-        if not 0<=size<=MAX_UPLOAD:raise PlatformError(413,'Request exceeds upload limit')
+        limit=self.service.artifact_limits.max_upload_bytes if artifact else MAX_CONTROL_BODY
+        if size<0 or (limit and size>limit):raise PlatformError(413,'Request exceeds configured upload limit' if artifact else 'Control request exceeds body limit')
         return self.rfile.read(size)
 
     def json(self):
@@ -236,6 +238,7 @@ class PlatformHandler(BaseHTTPRequestHandler):
             return self.respond(200,self.service.login(value.get('username',''),value.get('password','')))
         session=self.session(write=self.command not in {'GET','HEAD'})
         actor=session.principal
+        if route==['limits'] and self.command=='GET':return self.respond(200,self.service.artifact_limits.as_dict())
         if route==['session'] and self.command=='GET':return self.respond(200,{'principal':asdict(self.service.live(actor)),'csrf_token':session.csrf_token})
         if route==['logout'] and self.command=='POST':return self.respond(200,self.service.logout(self.token()[0]),headers={'Set-Cookie':f'{COOKIE}=; Path=/; Secure; HttpOnly; SameSite=Lax; Max-Age=0'})
         if route[0]=='users':
@@ -268,7 +271,7 @@ class PlatformHandler(BaseHTTPRequestHandler):
             result=self.service.grant(actor,project_id,route[3],role)
         elif len(route)==3 and route[2]=='releases':
             if self.command=='GET':result=self.service.releases(actor,project_id)
-            elif self.command=='POST':result=self.service.upload(actor,project_id,self.body(),original_commit=self.headers.get('X-Source-Commit'))
+            elif self.command=='POST':result=self.service.upload(actor,project_id,self.body(artifact=True),original_commit=self.headers.get('X-Source-Commit'))
             else:raise PlatformError(405,'Release operation unavailable')
         elif len(route)==3 and route[2] in {'preview','publish','rollback'} and self.command=='POST':
             value=self.json()

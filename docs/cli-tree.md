@@ -24,7 +24,8 @@ coolify
 │   │   └── set <PROJECT> <HOSTNAME> [--environment ENVIRONMENT]  # Owner: reserve HOSTNAME; explicit preview/publish activates it after verification.
 │   ├── grant <PROJECT> <USER-ID> [--role ROLE]  # Project owner: grant collaboration or revoke it immediately.
 │   ├── health [--port PORT]  # Check a local control runtime; exits nonzero on unhealthy HTTP status.
-│   ├── login [--url URL] [--username USERNAME] [--password-env PASSWORD-ENV]  # Sign in to an invited account and save a private session.
+│   ├── limits  # Show effective server artifact limits; zero means unlimited.
+│   ├── login [--url URL] [--username USERNAME] [--password-env PASSWORD-ENV]  # Sign in using ChatEnv credentials and cache the issued session.
 │   ├── logout  # Revoke this control session and all its app reader children.
 │   ├── logs <PROJECT> <DEPLOYMENT>  # Read sanitized native deployment logs for an authorized project.
 │   ├── preview <PROJECT> <RELEASE> [--request-key REQUEST-KEY]  # Build and run a selected release at its native preview application.

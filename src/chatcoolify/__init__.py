@@ -10,11 +10,11 @@ from .client import (
     PublicApplicationSpec,
 )
 
-__version__ = "0.2.4"
+__version__ = "0.2.5"
 
 from .platform import PlatformService
 from .platform_client import PlatformClient
-from .platform_artifact import PlatformError
+from .platform_artifact import ArtifactLimits, PlatformError
 from .platform_backend import CoolifyBackend
 
 __all__ = [
@@ -28,6 +28,7 @@ __all__ = [
     "PlatformService",
     "PlatformClient",
     "PlatformError",
+    "ArtifactLimits",
     "CoolifyBackend",
     "__version__",
 ]
