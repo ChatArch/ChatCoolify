@@ -6,9 +6,11 @@ import sys
 
 import click
 from chatstyle import prompt_sensitive_value
+from chatenv import EnvStore, get_paths
 
 from .platform_artifact import PlatformError
 from .platform_client import PlatformClient, configured_service
+from .config import PlatformConfig
 
 
 def output(value):click.echo(json.dumps(value,ensure_ascii=False,indent=2,default=str))
@@ -43,14 +45,24 @@ def platform(ctx,profile,home):
 
 
 @platform.command()
-@click.option('--url',required=True)
-@click.option('--username',required=True)
+@click.option('--url',help='Platform origin; defaults to this named ChatEnv profile.')
+@click.option('--username',help='Account username; defaults to this named ChatEnv profile.')
 @click.option('--password-env',help='Environment variable name containing the password.')
 @click.pass_context
 @boundary
 def login(ctx,url,username,password_env):
-    """Sign in to an invited account and save a private session."""
-    api=PlatformClient(url);result=api.login(username,password_value(password_env))
+    """Sign in using ChatEnv credentials and cache the issued session."""
+    values=EnvStore(get_paths(ctx.obj['platform_home']).envs_dir).load_profile(PlatformConfig,ctx.obj['platform_profile'])
+    url=url or values.get('CHATCOOLIFY_PLATFORM_URL')
+    username=username or values.get('CHATCOOLIFY_PLATFORM_USERNAME')
+    if not url or not username:
+        raise click.ClickException('Configure platform URL and username in this ChatEnv profile, or pass --url and --username')
+    api=PlatformClient(url)
+    same_origin=bool(values.get('CHATCOOLIFY_PLATFORM_URL') and api.url==values['CHATCOOLIFY_PLATFORM_URL'].rstrip('/'))
+    same_account=bool(values.get('CHATCOOLIFY_PLATFORM_USERNAME') and username.strip().casefold()==values['CHATCOOLIFY_PLATFORM_USERNAME'].strip().casefold())
+    password=(password_value(password_env) if password_env else
+              (values.get('CHATCOOLIFY_PLATFORM_PASSWORD') if same_origin and same_account else None) or password_value(None))
+    result=api.login(username,password)
     api.save(ctx.obj['platform_profile'],home=ctx.obj['platform_home'])
     output({'authenticated':True,'url':api.url,'principal':result['principal']})
 
@@ -69,6 +81,14 @@ def logout(ctx):
 def whoami(ctx):
     """Show current account metadata without session/CSRF secrets."""
     output(client(ctx).request('/session')['principal'])
+
+
+@platform.command('limits')
+@click.pass_context
+@boundary
+def artifact_limits(ctx):
+    """Show effective server artifact limits; zero means unlimited."""
+    output(client(ctx).limits().as_dict())
 
 
 @platform.group()

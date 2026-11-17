@@ -46,15 +46,32 @@ class CoolifyConfig(BaseEnvConfig):
 
 
 class PlatformConfig(BaseEnvConfig):
-    """A user's platform endpoint; opaque sessions live in TokenStore."""
+    """A user's endpoint and credentials; issued sessions live in TokenStore."""
     _title = 'ChatCoolify Platform'
     _aliases = ['coolify-platform']
     _storage_dir = 'CoolifyPlatform'
     CHATCOOLIFY_PLATFORM_URL = EnvField('CHATCOOLIFY_PLATFORM_URL',desc='HTTPS origin of the project platform')
+    CHATCOOLIFY_PLATFORM_USERNAME = EnvField('CHATCOOLIFY_PLATFORM_USERNAME',desc='Invited platform account username')
+    CHATCOOLIFY_PLATFORM_PASSWORD = EnvField('CHATCOOLIFY_PLATFORM_PASSWORD',is_sensitive=True,desc='Platform account password; opaque sessions remain in TokenStore')
 
     @classmethod
     def test(cls):
-        print('Platform endpoint schema loaded; login sessions use the private TokenStore.')
+        from .platform_client import PlatformClient
+        url=cls.CHATCOOLIFY_PLATFORM_URL.value
+        if not url:
+            print('Platform schema loaded; configure URL and account credentials to test sign-in.')
+            return
+        client=PlatformClient(url)
+        username=cls.CHATCOOLIFY_PLATFORM_USERNAME.value
+        password=cls.CHATCOOLIFY_PLATFORM_PASSWORD.value
+        if not username or not password:
+            raise RuntimeError('Configure platform username and password to test sign-in')
+        client.login(username,password)
+        try:
+            client.request('/session')
+        finally:
+            client.request('/logout',method='POST',payload={})
+        print('Platform account authentication passed; temporary test session revoked.')
 
 
 class PlatformServerConfig(BaseEnvConfig):
@@ -74,10 +91,16 @@ class PlatformServerConfig(BaseEnvConfig):
     CHATCOOLIFY_SOURCE_URL = EnvField('CHATCOOLIFY_SOURCE_URL',desc='Private read-only Git source base URL')
     CHATCOOLIFY_SOURCE_KEY_UUID = EnvField('CHATCOOLIFY_SOURCE_KEY_UUID',desc='Native key resource for restricted source clone')
     CHATCOOLIFY_EXTERNAL_TLS = EnvField('CHATCOOLIFY_EXTERNAL_TLS',default='false',desc='Existing external edge terminates HTTPS; native routing remains HTTP')
+    CHATCOOLIFY_MAX_UPLOAD_BYTES = EnvField('CHATCOOLIFY_MAX_UPLOAD_BYTES',default='1073741824',desc='Maximum ZIP bytes, default 1 GiB; 0 means unlimited')
+    CHATCOOLIFY_MAX_EXPANDED_BYTES = EnvField('CHATCOOLIFY_MAX_EXPANDED_BYTES',default='0',desc='Maximum expanded artifact bytes; 0 means unlimited')
+    CHATCOOLIFY_MAX_ARTIFACT_FILES = EnvField('CHATCOOLIFY_MAX_ARTIFACT_FILES',default='0',desc='Maximum archive file/directory entries; 0 means unlimited')
 
     @classmethod
     def test(cls):
-        print('Platform server schema loaded; credentials stay server-side.')
+        from .platform_artifact import ArtifactLimits
+        ArtifactLimits.from_values({name:getattr(cls,name).value for name in (
+            'CHATCOOLIFY_MAX_UPLOAD_BYTES','CHATCOOLIFY_MAX_EXPANDED_BYTES','CHATCOOLIFY_MAX_ARTIFACT_FILES')})
+        print('Platform server artifact policy valid; credentials stay server-side.')
 
 
 __all__ = ["CoolifyConfig", "PlatformConfig", "PlatformServerConfig"]

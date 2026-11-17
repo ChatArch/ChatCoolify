@@ -15,7 +15,33 @@ coolify platform --profile work logs PROJECT_ID DEPLOYMENT_ID
 coolify platform --profile work rollback PROJECT_ID PREVIOUS_PRODUCTION_RELEASE_ID
 ```
 
-登录交互隐藏密码；自动化使用 `--password-env KEY` 指定环境变量名，密码不进入参数。endpoint 使用 ChatEnv 的 `coolify-platform` 具名配置，opaque session 使用 TokenStore；选 profile 不切换其他 active 配置。目录上传排除隐藏文件（包括 `.env`/`.git`），拒绝软链接、凭据文件、越界路径和 runtime 保留路径；最多 2,000 文件、8 MiB ZIP、32 MiB 解包内容。只支持已经构建完成并含 `index.html` 的前端产物，不能通过上传自定义 Dockerfile 执行任意宿主命令。
+### ChatEnv 账号配置
+
+平台客户端的 `coolify-platform` 具名配置包含 `CHATCOOLIFY_PLATFORM_URL`、`CHATCOOLIFY_PLATFORM_USERNAME` 和敏感字段 `CHATCOOLIFY_PLATFORM_PASSWORD`。账号密码由 ChatEnv 管理，TokenStore 仅缓存登录后签发的会话，不要求普通用户配置原生 Team token。
+
+```bash
+chatenv new work -t coolify-platform -i
+chatenv test work -t coolify-platform
+coolify platform --profile work login
+coolify platform --profile work whoami
+coolify platform --profile work limits
+```
+
+URL／username 参数可覆盖本次登录输入；未提供的字段从选定 profile 读取。覆盖到不同平台 origin 或账号时，不复用原 profile 的密码，需隐藏输入或显式 `--password-env`。会话缓存绑定签发 origin；配置了账号时还核对实际会话身份，不能把旧账号的 token 当成新账号。密码交互隐藏，自动化仍可用 `--password-env KEY` 指定变量名。成功登录后使用 ChatEnv 保存该 profile 的账号凭据，TokenStore 保存会话；不会切换或读取另一个 active profile 的账号。具备账号密码时，普通命令会先复用有效会话；缓存缺失或会话检查返回401时仅登录一次，再执行原操作，不盲目重放 upload/publish。仅保存URL和token的旧profile继续可用，但过期后需要登录或补齐账号字段。
+
+### 可配置的上传策略
+
+平台 operator 在既有 `coolify-platform-server` 配置中设置：
+
+| 字段 | 默认值 | 含义 |
+| --- | --- | --- |
+| `CHATCOOLIFY_MAX_UPLOAD_BYTES` | `1073741824` | 单次ZIP最大1 GiB；0不限 |
+| `CHATCOOLIFY_MAX_EXPANDED_BYTES` | `0` | 解包总量默认不限 |
+| `CHATCOOLIFY_MAX_ARTIFACT_FILES` | `0` | 文件／目录条目数默认不限 |
+
+修改服务端配置后经受管服务重新加载生效；反代也不能保留更低的请求体限制。客户端通过已认证的 `/api/platform/v1/limits` 读取有效策略，`coolify platform limits` 可核对当前值。只有旧服务明确返回404时才兼容其旧版8 MiB／32 MiB／2000条策略；401、403或网络错误不会伪装成兼容模式。
+
+目录上传仍排除隐藏文件（包括 `.env`/`.git`），拒绝软链接、凭据文件、越界路径和 runtime 保留路径。只支持已经构建完成并含根级 `index.html` 的前端产物，不能通过上传自定义 Dockerfile 执行任意宿主命令。生产验证分块读取ZIP成员；上传仍需要与压缩包大小相应的内存，0不限应按可信协作场景及实际资源设置。
 
 ## 可读域名与自定义前缀
 

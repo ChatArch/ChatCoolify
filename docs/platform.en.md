@@ -15,7 +15,33 @@ coolify platform --profile work logs PROJECT_ID DEPLOYMENT_ID
 coolify platform --profile work rollback PROJECT_ID PREVIOUS_PRODUCTION_RELEASE_ID
 ```
 
-Passwords are entered through a hidden prompt or an environment variable named by `--password-env`. ChatEnv owns named endpoint profiles; TokenStore owns opaque sessions. Named profile selection does not change another active profile. Uploads exclude hidden files such as `.env` and `.git`, reject symlinks, credentials and reserved/traversal paths, and require `index.html`. Limits: 2,000 files, 8 MiB ZIP and 32 MiB expanded content. Arbitrary user Dockerfiles are not accepted.
+### ChatEnv account configuration
+
+The named `coolify-platform` profile owns `CHATCOOLIFY_PLATFORM_URL`, `CHATCOOLIFY_PLATFORM_USERNAME` and sensitive `CHATCOOLIFY_PLATFORM_PASSWORD`. ChatEnv stores credentials; TokenStore only caches issued sessions. Ordinary users do not need a native Team token.
+
+```bash
+chatenv new work -t coolify-platform -i
+chatenv test work -t coolify-platform
+coolify platform --profile work login
+coolify platform --profile work whoami
+coolify platform --profile work limits
+```
+
+Explicit URL/username options override this login's input; omitted fields use the selected profile. Changing origin or account does not reuse the profile's old password: supply a fresh hidden input or explicit `--password-env`. Cached sessions remain bound to their issuing origin, and configured usernames are checked against the actual session principal. Passwords use a hidden prompt or the variable named by `--password-env`. Successful login persists credentials through ChatEnv and caches the session without switching another active profile. When credentials are configured, normal commands reuse a valid session or authenticate once before the operation if the cache is missing or its session check returns401. Ambiguous upload/publish requests are not replayed. Legacy URL-and-token-only profiles remain usable, but expired sessions require login or configured credentials.
+
+### Configurable artifact policy
+
+The operator configures the existing `coolify-platform-server` profile:
+
+| Field | Default | Meaning |
+| --- | --- | --- |
+| `CHATCOOLIFY_MAX_UPLOAD_BYTES` | `1073741824` | Maximum ZIP bytes, 1 GiB; 0 is unlimited |
+| `CHATCOOLIFY_MAX_EXPANDED_BYTES` | `0` | Expanded bytes, unlimited by default |
+| `CHATCOOLIFY_MAX_ARTIFACT_FILES` | `0` | File/directory entry count, unlimited by default |
+
+Reload through the managed service after changing server configuration, and remove lower ingress body limits. Clients discover the effective authenticated `/api/platform/v1/limits` policy; `coolify platform limits` displays it. Only an explicit old-server404 falls back to legacy8MiB/32MiB/2000-entry policy. Authentication and transport failures never trigger that fallback.
+
+Uploads still exclude hidden files such as `.env`/`.git`, reject symlinks, credentials and reserved/traversal paths, and require root `index.html`. Arbitrary user Dockerfiles are not accepted. Production validation reads ZIP members in chunks; uploads still require memory proportional to compressed size, so unlimited settings are for trusted collaborators and available resources.
 
 ## Readable managed domains
 

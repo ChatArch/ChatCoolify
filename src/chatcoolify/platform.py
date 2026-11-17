@@ -21,7 +21,7 @@ import uuid
 
 from chatlogin import ManagedUsers, ManagedError, Role
 
-from .platform_artifact import PlatformError, validate_archive, digest
+from .platform_artifact import ArtifactLimits, PlatformError, validate_archive, digest
 from .platform_source import GitSources,frontend_files
 
 
@@ -52,7 +52,7 @@ def domain_hostname(value):
 
 class PlatformService:
     """Importable service; HTTP/CLI adapters do not own lifecycle decisions."""
-    def __init__(self, root, backend, *, control_url, internal_url=None, domain_suffix=None, reserved_hostnames=()):
+    def __init__(self, root, backend, *, control_url, internal_url=None, domain_suffix=None, reserved_hostnames=(), artifact_limits=None):
         self.root = Path(root).resolve()
         self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.root.chmod(0o700)
@@ -60,6 +60,7 @@ class PlatformService:
         self.users = ManagedUsers.for_instance('chatcoolify-platform', home=self.root / 'identity', ttl=86400)
         self.sources = GitSources(self.root / 'repos')
         self.backend = backend
+        self.artifact_limits = artifact_limits if artifact_limits is not None else ArtifactLimits()
         self.control_url = control_url.rstrip('/')
         self.internal_url = (internal_url or control_url).rstrip('/')
         control_host=urlsplit(self.control_url).hostname or ''
@@ -479,11 +480,11 @@ class PlatformService:
         return {'project_id':project_id,'user_id':user_id,'role':role}
 
     def upload(self, actor, project_id, data, *, original_commit=None):
-        self.check(actor,project_id,'deploy'); validate_archive(data)
+        self.check(actor,project_id,'deploy'); validate_archive(data,limits=self.artifact_limits,read_files=False)
         if original_commit is not None and not re.fullmatch(r'[0-9a-f]{40,64}',original_commit):
             raise PlatformError(422,'Invalid original source commit')
         sha = digest(data)
-        source_files,docker_digest=frontend_files(data)
+        source_files,docker_digest=frontend_files(data,limits=self.artifact_limits)
         with self.lock:
             with self.connection() as db:
                 row = db.execute('SELECT * FROM releases WHERE project_id=? AND artifact_sha256=? AND dockerfile_sha256=?',(project_id,sha,docker_digest)).fetchone()
@@ -552,7 +553,7 @@ class PlatformService:
                     # with the same website bytes and the current guarded runtime.
                     if plan['desired_url']!=plan['current_url'] or len(urls)>1:
                         archive=self.root/'artifacts'/(release['artifact_sha256']+'.zip')
-                        if not archive.is_file() or frontend_files(archive.read_bytes())[1]!=release['dockerfile_sha256']:
+                        if not archive.is_file() or frontend_files(archive.read_bytes(),limits=self.artifact_limits)[1]!=release['dockerfile_sha256']:
                             raise PlatformError(409,'Upload the site again with the current runtime before changing domains or using legacy aliases')
                     deployment_id = uuid.uuid4().hex
                     db.execute('INSERT INTO deployments VALUES(?,?,?,?,?,?,?,?,?)',
